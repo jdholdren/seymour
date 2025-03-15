@@ -1,0 +1,11 @@
+@host=http://localhost:4444
+
+### Health check
+
+GET /healthz
+
+### Create a feed
+
+POST /feeds
+Content-Type: application/json
+{}
