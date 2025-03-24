@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/microcosm-cc/bluemonday"
 
 	"github.com/jdholdren/seymour/internal/agg/database"
 	"github.com/jdholdren/seymour/internal/agg/model"
@@ -42,13 +45,10 @@ func (s *Syncer) Run(ctx context.Context) error {
 		return fmt.Errorf("error initializing with all feeds: %s", err)
 	}
 	for _, feed := range feeds {
-		s.subs = append(s.subs, subscribe(feed.URL))
+		s.subs = append(s.subs, subscribe(feed))
 	}
 	updates := mergeSubs(s.subs...)
 
-	var (
-		toInsert []model.Entry
-	)
 	for {
 		select {
 		case <-ctx.Done():
@@ -58,8 +58,9 @@ func (s *Syncer) Run(ctx context.Context) error {
 			}
 			return ctx.Err()
 		case ups := <-updates:
-			// Batch entries for insertion
-			toInsert = append(toInsert, ups...)
+			if err := s.repo.InsertEntries(ctx, ups); err != nil {
+				return err
+			}
 		}
 	}
 }
@@ -67,13 +68,15 @@ func (s *Syncer) Run(ctx context.Context) error {
 // Periodically fetches from an RSS feed and emits items as a stream.
 type subscription struct {
 	feedUrl string // Where this subscription is fetching from
+	feedID  string
 	updates chan []model.Entry
 	close   chan struct{}
 }
 
-func subscribe(feedUrl string) *subscription {
+func subscribe(feed model.Feed) *subscription {
 	sub := &subscription{
-		feedUrl: feedUrl,
+		feedUrl: feed.URL,
+		feedID:  feed.ID,
 		updates: make(chan []model.Entry),
 		close:   make(chan struct{}),
 	}
@@ -131,7 +134,7 @@ func (s *subscription) loop() {
 			}
 
 			// Set the next time to fetch with a backoff for number of errors (linear backoff):
-			timeToFetch = time.After(time.Duration(15+fetchErrors) * time.Second)
+			timeToFetch = time.After(time.Duration(15+fetchErrors) * time.Minute)
 		case updates <- send:
 			// Empty out the buffer:
 			send = nil
@@ -186,17 +189,36 @@ func (s *subscription) fetch() ([]model.Entry, error) {
 	for _, channel := range feed.Channel {
 		for _, item := range channel.Items {
 			ret = append(ret, model.Entry{
+				FeedID:      s.feedID,
 				GUID:        item.GUID,
-				Title:       item.Title,
-				Description: item.Description,
+				Title:       sanitize(item.Title),
+				Description: sanitize(item.Description),
 			})
 		}
 	}
 	return ret, nil
 }
 
+var stripPolicy = bluemonday.StrictPolicy()
+
+// Removes all html tags from the string, usually a description.
+//
+// Also limits the length of the string so there's not a massive chunk of text being output.
+func sanitize(s string) string {
+	s = strings.TrimSpace(s)
+	s = stripPolicy.Sanitize(s)
+	if len(s) > 2048 {
+		s = s[:2048]
+	}
+
+	return s
+}
+
 // Turns a number of update channels into one.
 func mergeSubs(subs ...*subscription) chan []model.Entry {
+	if len(subs) == 0 {
+		return nil // Never emits
+	}
 	// The channel to return
 	out := make(chan []model.Entry)
 	// Wait group to wait for all channels to be closed

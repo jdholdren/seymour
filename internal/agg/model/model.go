@@ -20,6 +20,7 @@ type (
 	// Entry represents a unique entry in an RSS feed.
 	Entry struct {
 		ID          string `db:"id"`
+		FeedID      string `db:"feed_id"`
 		GUID        string `db:"guid"`
 		Title       string `db:"title"`
 		Description string `db:"description"`

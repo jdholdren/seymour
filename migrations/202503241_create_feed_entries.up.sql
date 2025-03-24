@@ -1,8 +1,8 @@
 CREATE TABLE feed_entries (
 	id TEXT PRIMARY KEY,
+	feed_id TEXT NOT NULL,
 	title TEXT NOT NULL,
-	publish_date DATE NOT NULL,
 	description TEXT NOT NULL,
-	guid TEXT NOT NULL, -- The link to the original article
+	guid TEXT NOT NULL UNIQUE,
 	created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

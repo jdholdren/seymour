@@ -11,7 +11,10 @@ import (
 	"modernc.org/sqlite"
 )
 
-const feedNamespace = "-fd"
+const (
+	feedNamespace  = "-fd"
+	entryNamespace = "-ntry"
+)
 
 // Repo represents the surface for interacting with feeds.
 type Repo struct {
@@ -53,5 +56,24 @@ func (r Repo) AllFeeds(ctx context.Context) ([]model.Feed, error) {
 }
 
 func (r Repo) InsertEntries(ctx context.Context, entries []model.Entry) error {
-	return errors.New("unimplemented")
+	// Create id's for the entries
+	for i := range entries {
+		entries[i].ID = fmt.Sprintf("%s%s", uuid.New().String(), entryNamespace)
+	}
+
+	q := `INSERT INTO feed_entries (id, feed_id, title, description, guid)
+	VALUES (:id, :feed_id, :title, :description, :guid)
+	ON CONFLICT(guid) DO NOTHING;`
+	if _, err := r.db.NamedExecContext(ctx, q, entries); err != nil {
+		return fmt.Errorf("error inserting entries; %s", err)
+	}
+
+	// Index of the entries
+	q = `INSERT INTO entry_search (entry_id, title, desc)
+	VALUES (:id, :title, :description);`
+	if _, err := r.db.NamedExecContext(ctx, q, entries); err != nil {
+		return fmt.Errorf("error indexing entries; %s", err)
+	}
+
+	return nil
 }
