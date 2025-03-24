@@ -16,17 +16,17 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/jdholdren/seymour-agg/internal/core"
-	"github.com/jdholdren/seymour-agg/internal/core/database"
-	"github.com/jdholdren/seymour-agg/logger"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/sqlite"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/sethvargo/go-envconfig"
+	"golang.org/x/sync/errgroup"
+
+	"github.com/jdholdren/seymour/internal/agg"
+	aggdb "github.com/jdholdren/seymour/internal/agg/database"
+	"github.com/jdholdren/seymour/logger"
 )
 
 type config struct {
@@ -79,7 +79,9 @@ func run(ctx context.Context, cfg config) error {
 		return fmt.Errorf("error migrating: %s", err)
 	}
 
-	s := core.NewServer(core.Config{Port: cfg.Port}, database.NewRepo(dbx))
+	aggRepo := aggdb.NewRepo(dbx)
+	s := agg.NewServer(cfg.Port, aggRepo)
+	syncer := agg.NewSyncer(aggRepo)
 
 	g, gCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
@@ -103,7 +105,14 @@ func run(ctx context.Context, cfg config) error {
 		return nil
 	})
 
-	// TODO: Start the cron
+	g.Go(func() error {
+		// Start the syncer
+		if err := syncer.Run(gCtx); err != nil {
+			return fmt.Errorf("error running syncer: %s", err)
+		}
+
+		return nil
+	})
 
 	if err := g.Wait(); err != nil {
 		return fmt.Errorf("error running: %s", err)
@@ -128,6 +137,7 @@ func migrateDB(dbx *sqlx.DB) error {
 	if err := migrator.Up(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("error migrating: %s", err)
 	}
+	slog.Info("migrated")
 
 	return nil
 }

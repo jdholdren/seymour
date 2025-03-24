@@ -1,11 +1,15 @@
 package v1
 
 import (
-	"github.com/jdholdren/seymour-agg/api"
+	"github.com/jdholdren/seymour/api"
 )
 
 type CreateFeedRequest struct {
 	URL string `json:"url"`
+}
+
+type CreateFeedResponse struct {
+	ID string `json:"id"`
 }
 
 // Validate checks that the body (minus logic checks) is valid.

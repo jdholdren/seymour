@@ -1,4 +1,4 @@
-module github.com/jdholdren/seymour-agg
+module github.com/jdholdren/seymour
 
 go 1.22.4
 
@@ -9,12 +9,13 @@ require (
 
 require (
 	github.com/golang-migrate/migrate/v4 v4.18.2
+	github.com/google/uuid v1.6.0
 	github.com/jmoiron/sqlx v1.4.0
 	golang.org/x/sync v0.10.0
+	modernc.org/sqlite v1.18.1
 )
 
 require (
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
@@ -31,7 +32,6 @@ require (
 	modernc.org/mathutil v1.5.0 // indirect
 	modernc.org/memory v1.2.1 // indirect
 	modernc.org/opt v0.1.3 // indirect
-	modernc.org/sqlite v1.18.1 // indirect
 	modernc.org/strutil v1.1.3 // indirect
 	modernc.org/token v1.0.0 // indirect
 )

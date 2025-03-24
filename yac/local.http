@@ -6,6 +6,8 @@ GET /healthz
 
 ### Create a feed
 
-POST /feeds
+POST /v1/feeds
 Content-Type: application/json
-{}
+{
+    "url": "https://apenwarr.ca/log/rss.php"
+}
