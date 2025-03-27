@@ -22,38 +22,32 @@ import (
 // It asks the subscriptions to periodically fetch from RSS feeds and then updates
 // the feeds in the db as well as inserting the new entries.
 type Syncer struct {
-	repo database.Repo
-
-	// All currently known subscriptions for the loop
-	mu   sync.Mutex
-	subs []*subscription
+	repo  database.Repo
+	addCh chan model.Feed
 }
 
-func NewSyncer(r database.Repo) *Syncer {
+func NewSyncer(repo database.Repo) *Syncer {
 	return &Syncer{
-		repo: r,
+		repo:  repo,
+		addCh: make(chan model.Feed, 50),
 	}
 }
 
 // Run starts the syncer loop.
-func (s *Syncer) Run(ctx context.Context) error {
+func (s *Syncer) Run(ctx context.Context, feeds []model.Feed) error {
 	ctx = logger.Ctx(ctx, slog.String("component", "syncer"))
 
-	// Subscriptions are initially the feeds in the database:
-	feeds, err := s.repo.AllFeeds(ctx)
-	if err != nil {
-		return fmt.Errorf("error initializing with all feeds: %s", err)
-	}
+	var subs []*subscription
 	for _, feed := range feeds {
-		s.subs = append(s.subs, subscribe(feed))
+		subs = append(subs, subscribe(feed))
 	}
-	updates := mergeSubs(s.subs...)
+	updates := mergeSubs(subs...)
 
 	for {
 		select {
 		case <-ctx.Done():
 			// Stop each subscription and then exit
-			for _, sub := range s.subs {
+			for _, sub := range subs {
 				sub.stop()
 			}
 			return ctx.Err()
@@ -61,8 +55,28 @@ func (s *Syncer) Run(ctx context.Context) error {
 			if err := s.repo.InsertEntries(ctx, ups); err != nil {
 				return err
 			}
+		case feed := <-s.addCh:
+			// Stop all subscriptions and then restart them
+			for _, sub := range subs {
+				sub.stop()
+			}
+			// Clear out the current subscriptions
+			subs = []*subscription{}
+			feeds = append(feeds, feed)
+
+			// Subscribe to all feeds again
+			for _, feed := range feeds {
+				// TODO: Separate out starting the routine?
+				subs = append(subs, subscribe(feed))
+			}
+
+			updates = mergeSubs(subs...)
 		}
 	}
+}
+
+func (s *Syncer) AddFeed(feed model.Feed) {
+	s.addCh <- feed
 }
 
 // Periodically fetches from an RSS feed and emits items as a stream.

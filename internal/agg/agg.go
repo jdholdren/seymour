@@ -18,17 +18,19 @@ type (
 	Server struct {
 		*server.Server
 
-		repo database.Repo
+		repo   database.Repo
+		syncer *Syncer
 	}
 )
 
-func NewServer(port int, repo database.Repo) Server {
+func NewServer(port int, repo database.Repo, syncer *Syncer) Server {
 	var (
 		s, r = server.NewServer(port)
 	)
 	srvr := Server{
 		Server: s,
 		repo:   repo,
+		syncer: syncer,
 	}
 
 	// Attach routes
@@ -47,7 +49,7 @@ func (s Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := s.repo.InsertFeed(r.Context(), model.Feed{
+	feed, err := s.repo.InsertFeed(r.Context(), model.Feed{
 		URL: body.URL,
 	})
 	if err != nil {
@@ -58,10 +60,11 @@ func (s Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Trigger an immediate sync
+	// Make sure that its added to the syncer
+	s.syncer.AddFeed(feed)
 
 	resp := feedsv1.CreateFeedResponse{
-		ID: id,
+		ID: feed.ID,
 	}
 	server.WriteJSON(w, http.StatusCreated, resp)
 }

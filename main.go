@@ -80,8 +80,8 @@ func run(ctx context.Context, cfg config) error {
 	}
 
 	aggRepo := aggdb.NewRepo(dbx)
-	s := agg.NewServer(cfg.Port, aggRepo)
 	syncer := agg.NewSyncer(aggRepo)
+	s := agg.NewServer(cfg.Port, aggRepo, syncer)
 
 	g, gCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
@@ -104,20 +104,25 @@ func run(ctx context.Context, cfg config) error {
 
 		return nil
 	})
-
 	g.Go(func() error {
-		// Start the syncer
-		if err := syncer.Run(gCtx); err != nil {
-			return fmt.Errorf("error running syncer: %s", err)
+		// Start the syncer with initial feeds from the db.
+		allFeeds, err := aggRepo.AllFeeds(gCtx)
+		if err != nil {
+			return fmt.Errorf("error getting all feeds: %s", err)
+		}
+
+		if err := syncer.Run(gCtx, allFeeds); err != nil {
+			return fmt.Errorf("error running syncer: %w", err)
 		}
 
 		return nil
 	})
 
-	if err := g.Wait(); err != nil {
+	if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("error running: %s", err)
 	}
 
+	panic("ello") // For checking loose goroutines
 	return nil
 }
 
