@@ -52,7 +52,14 @@ func (s *Syncer) Run(ctx context.Context, feeds []model.Feed) error {
 			}
 			return ctx.Err()
 		case ups := <-updates:
-			if err := s.repo.InsertEntries(ctx, ups); err != nil {
+			if err := s.repo.InsertEntries(ctx, ups.entries); err != nil {
+				return err
+			}
+			if err := s.repo.UpdateFeed(ctx, ups.feedID, model.UpdateFeedArgs{
+				Title:       ups.title,
+				Description: ups.description,
+				LastSynced:  time.Now(),
+			}); err != nil {
 				return err
 			}
 		case feed := <-s.addCh:
@@ -83,7 +90,7 @@ func (s *Syncer) AddFeed(feed model.Feed) {
 type subscription struct {
 	feedUrl string // Where this subscription is fetching from
 	feedID  string
-	updates chan []model.Entry
+	updates chan fetchResult
 	close   chan struct{}
 }
 
@@ -91,7 +98,7 @@ func subscribe(feed model.Feed) *subscription {
 	sub := &subscription{
 		feedUrl: feed.URL,
 		feedID:  feed.ID,
-		updates: make(chan []model.Entry),
+		updates: make(chan fetchResult),
 		close:   make(chan struct{}),
 	}
 	go sub.loop()
@@ -107,10 +114,8 @@ func (s *subscription) loop() {
 		timeToFetch = time.After(0)
 		// Channel that is set to emit when a fetch starts and emits when the fetch has completed
 		fetchDone chan fetchResult
-		// Set to nil until there's updates to send to the receiver
-		updates chan []model.Entry
 		// Buffer of entries that need to be sent to the receiver after a fetch occurs
-		send []model.Entry
+		send []fetchResult
 		// Entries that have already been seen by the subscription and don't need to be sent again.
 		// Key is the post guid.
 		seen = map[string]struct{}{}
@@ -118,6 +123,19 @@ func (s *subscription) loop() {
 		fetchErrors int
 	)
 	for {
+		var (
+			// Set to nil until there's updates to send to the receiver
+			updates chan fetchResult
+			// The first fetchResult that needs to be sent
+			first fetchResult
+		)
+		// If there are pending results in send, grab the first out and enable the updates channel to
+		// send it.
+		if len(send) > 0 {
+			first = send[0]
+			updates = s.updates
+		}
+
 		select {
 		case <-s.close:
 			// Close the updates channel
@@ -132,44 +150,46 @@ func (s *subscription) loop() {
 
 			// Start another routine that will emit the result back
 			go func() {
-				entries, err := s.fetch()
-				fetchDone <- fetchResult{entries: entries, err: err}
+				fetchDone <- s.fetch()
 				close(fetchDone)
 			}()
 		case result := <-fetchDone:
+			// Disable the case to receive results
+			fetchDone = nil
+
+			// If there was an error, do not emit the result.
+			// Add to the error counter so the next fetch has a linear backoff.
 			if result.err != nil {
 				slog.Error("error fetching %s", "error", result.err)
 				fetchErrors += 1
-			} else {
-				// Days since last incident: 0
-				fetchErrors = 0
+
+				timeToFetch = time.After(time.Duration(15+fetchErrors) * time.Minute)
+				continue
 			}
 
+			// Reset the counter for a successful fetch
+			fetchErrors = 0
+
 			// Filter out any entries already seen:
+			newEntries := []model.Entry{}
 			for _, e := range result.entries {
 				if _, ok := seen[e.GUID]; ok {
 					continue
 				}
 				seen[e.GUID] = struct{}{} // Mark is as seen
 
-				send = append(send, e)
-			}
-			// If there are  pending entries to send, enable the updates channel:
-			if len(send) > 0 {
-				updates = s.updates
+				newEntries = append(newEntries, e)
 			}
 
-			// Disable the case to receive results
-			fetchDone = nil
+			// Add the result to the buffer to be sent with only not-seen-before entries
+			result.entries = newEntries
+			send = append(send, result)
 
-			// Set the next time to fetch with a backoff for number of errors (linear backoff):
-			timeToFetch = time.After(time.Duration(15+fetchErrors) * time.Minute)
-		case updates <- send:
-			// Empty out the buffer:
-			send = nil
-			// Turn off this case so this isn't immediately hit.
-			// Will be turned on when there's more pending entries to send:
-			updates = nil
+			// Set the next time to fetch
+			timeToFetch = time.After(15 * time.Minute)
+		case updates <- first:
+			// Head of buffer was sent, remove it
+			send = send[1:]
 		}
 	}
 }
@@ -182,9 +202,10 @@ func (s *subscription) stop() {
 type rssFeedResp struct {
 	XMLName xml.Name `xml:"rss"`
 	Channel []struct {
-		Title string `xml:"title"`
-		Link  string `xml:"link"`
-		Items []struct {
+		Title       string `xml:"title"`
+		Description string `xml:"description"`
+		Link        string `xml:"link"`
+		Items       []struct {
 			Title       string `xml:"title"`
 			Link        string `xml:"link"`
 			GUID        string `xml:"guid"`
@@ -194,36 +215,40 @@ type rssFeedResp struct {
 }
 
 type fetchResult struct {
-	entries []model.Entry
-	err     error
-	// TODO: Something with the metadata of the feed
+	feedID      string
+	entries     []model.Entry
+	title       string
+	description string
+
+	// Error that occurred while fetching
+	err error
 }
 
 // Goes to the url and grabs the RSS feed items.
-func (s *subscription) fetch() ([]model.Entry, error) {
+func (s *subscription) fetch() fetchResult {
 	// TODO: Maybe emit the feed itself for title updates?
 	client := &http.Client{
 		Timeout: time.Second * 3,
 	}
 	resp, err := client.Get(s.feedUrl)
 	if err != nil {
-		return nil, fmt.Errorf("error getting feed url: %w", err)
+		return fetchResult{err: fmt.Errorf("error getting feed url: %w", err)}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return fetchResult{err: fmt.Errorf("unexpected status code: %d", resp.StatusCode)}
 	}
 
 	var feed rssFeedResp
 	if err := xml.NewDecoder(resp.Body).Decode(&feed); err != nil {
-		return nil, fmt.Errorf("error decoding feed: %s", err)
+		return fetchResult{err: fmt.Errorf("error decoding feed: %s", err)}
 	}
 
-	ret := []model.Entry{}
+	entries := []model.Entry{}
 	for _, channel := range feed.Channel {
 		for _, item := range channel.Items {
-			ret = append(ret, model.Entry{
+			entries = append(entries, model.Entry{
 				FeedID:      s.feedID,
 				GUID:        item.GUID,
 				Title:       sanitize(item.Title),
@@ -231,7 +256,12 @@ func (s *subscription) fetch() ([]model.Entry, error) {
 			})
 		}
 	}
-	return ret, nil
+	return fetchResult{
+		feedID:      s.feedID,
+		title:       feed.Channel[0].Title,
+		description: feed.Channel[0].Description,
+		entries:     entries,
+	}
 }
 
 var stripPolicy = bluemonday.StrictPolicy()
@@ -250,18 +280,18 @@ func sanitize(s string) string {
 }
 
 // Turns a number of update channels into one.
-func mergeSubs(subs ...*subscription) chan []model.Entry {
+func mergeSubs(subs ...*subscription) chan fetchResult {
 	if len(subs) == 0 {
 		return nil // Never emits
 	}
 	// The channel to return
-	out := make(chan []model.Entry)
+	out := make(chan fetchResult)
 	// Wait group to wait for all channels to be closed
 	var wg sync.WaitGroup
 
 	// Start a routine for each channel to read from that forwards to the
 	// output channel.
-	forward := func(c chan []model.Entry) {
+	forward := func(c chan fetchResult) {
 		defer wg.Done()
 		for f := range c {
 			out <- f

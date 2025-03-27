@@ -9,5 +9,10 @@ GET /healthz
 POST /v1/feeds
 Content-Type: application/json
 {
-    "url": "https://tailscale.com/blog/index.xml"
+    "url": "https://apenwarr.ca/log/rss.php"
 }
+
+### Get a feed
+
+@id = {{$input input id?}}
+GET /v1/feeds/{{id}}

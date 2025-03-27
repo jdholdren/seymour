@@ -25,8 +25,16 @@ type (
 		Title       string `db:"title"`
 		Description string `db:"description"`
 	}
+
+	// Holds the optional feeds for updating a feed.
+	UpdateFeedArgs struct {
+		Title       string
+		Description string
+		LastSynced  time.Time
+	}
 )
 
 var (
 	ErrConflict = errors.New("conflict")
+	ErrNotFound = errors.New("not found")
 )

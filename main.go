@@ -122,7 +122,7 @@ func run(ctx context.Context, cfg config) error {
 		return fmt.Errorf("error running: %s", err)
 	}
 
-	panic("ello") // For checking loose goroutines
+	panic("") // For checking loose goroutines
 	return nil
 }
 

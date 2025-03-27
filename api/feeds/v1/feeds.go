@@ -1,16 +1,29 @@
 package v1
 
 import (
+	"time"
+
 	"github.com/jdholdren/seymour/api"
 )
 
-type CreateFeedRequest struct {
-	URL string `json:"url"`
-}
+type (
+	CreateFeedRequest struct {
+		URL string `json:"url"`
+	}
 
-type CreateFeedResponse struct {
-	ID string `json:"id"`
-}
+	CreateFeedResponse struct {
+		ID string `json:"id"`
+	}
+
+	Feed struct {
+		ID           string     `json:"id"`
+		Title        string     `json:"title"`
+		Description  string     `json:"description"`
+		LastSyncedAt *time.Time `json:"last_synced_at"`
+		CreatedAt    time.Time  `json:"created_at"`
+		UpdatedAt    time.Time  `json:"updated_at"`
+	}
+)
 
 // Validate checks that the body (minus logic checks) is valid.
 //

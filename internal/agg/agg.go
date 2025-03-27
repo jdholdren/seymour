@@ -3,6 +3,7 @@
 package agg
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/jdholdren/seymour/api"
@@ -35,6 +36,7 @@ func NewServer(port int, repo database.Repo, syncer *Syncer) Server {
 
 	// Attach routes
 	r.HandleFunc("POST /v1/feeds", srvr.handleCreateFeed)
+	r.HandleFunc("GET /v1/feeds/{id}", srvr.handleGetFeed)
 
 	return srvr
 }
@@ -65,6 +67,36 @@ func (s Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 
 	resp := feedsv1.CreateFeedResponse{
 		ID: feed.ID,
+	}
+	server.WriteJSON(w, http.StatusCreated, resp)
+}
+
+func (s Server) handleGetFeed(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	feed, err := s.repo.Feed(r.Context(), id)
+	if errors.Is(err, model.ErrNotFound) {
+		server.WriteJSON(w, http.StatusInternalServerError, api.Error{
+			Reason:  "not found",
+			Message: err.Error(),
+		})
+		return
+	}
+	if err != nil {
+		server.WriteJSON(w, http.StatusInternalServerError, api.Error{
+			Reason:  "internal error",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	resp := feedsv1.Feed{
+		ID:           feed.ID,
+		Title:        feed.Title,
+		Description:  feed.Description,
+		LastSyncedAt: feed.LastSyncedAt,
+		CreatedAt:    feed.CreatedAt,
+		UpdatedAt:    feed.UpdatedAt,
 	}
 	server.WriteJSON(w, http.StatusCreated, resp)
 }

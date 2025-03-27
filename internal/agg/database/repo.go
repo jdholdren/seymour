@@ -2,13 +2,16 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 
+	sq "github.com/Masterminds/squirrel"
 	"github.com/google/uuid"
-	"github.com/jdholdren/seymour/internal/agg/model"
 	"github.com/jmoiron/sqlx"
 	"modernc.org/sqlite"
+
+	"github.com/jdholdren/seymour/internal/agg/model"
 )
 
 const (
@@ -31,8 +34,11 @@ func NewRepo(dbx *sqlx.DB) Repo {
 func (r Repo) Feed(ctx context.Context, id string) (model.Feed, error) {
 	const q = `SELECT * FROM feeds WHERE id = ?;`
 	var feed model.Feed
-	if err := r.db.GetContext(ctx, &feed, q, id); err != nil {
-		// TODO: Handle not found
+	err := r.db.GetContext(ctx, &feed, q, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return model.Feed{}, model.ErrNotFound
+	}
+	if err != nil {
 		return model.Feed{}, fmt.Errorf("error fetching feed: %s", err)
 	}
 
@@ -67,16 +73,44 @@ func (r Repo) AllFeeds(ctx context.Context) ([]model.Feed, error) {
 }
 
 func (r Repo) InsertEntries(ctx context.Context, entries []model.Entry) error {
+	if len(entries) == 0 {
+		return nil
+	}
+
 	// Create id's for the entries
 	for i := range entries {
 		entries[i].ID = fmt.Sprintf("%s%s", uuid.New().String(), entryNamespace)
 	}
 
-	q := `INSERT INTO feed_entries (id, feed_id, title, description, guid)
+	const q = `INSERT INTO feed_entries (id, feed_id, title, description, guid)
 	VALUES (:id, :feed_id, :title, :description, :guid)
 	ON CONFLICT(guid) DO NOTHING;`
 	if _, err := r.db.NamedExecContext(ctx, q, entries); err != nil {
 		return fmt.Errorf("error inserting entries; %s", err)
+	}
+
+	return nil
+}
+
+func (r Repo) UpdateFeed(ctx context.Context, id string, args model.UpdateFeedArgs) error {
+	q := sq.Update("feeds")
+	if args.Title != "" {
+		q = q.Set("title", args.Title)
+	}
+	if args.Description != "" {
+		q = q.Set("description", args.Description)
+	}
+	if !args.LastSynced.IsZero() {
+		q = q.Set("last_synced_at", args.LastSynced)
+	}
+	q = q.Where(sq.Eq{"id": id})
+
+	query, qArgs, err := q.ToSql()
+	if err != nil {
+		return fmt.Errorf("error constructing sql: %s", err)
+	}
+	if _, err := r.db.ExecContext(ctx, query, qArgs...); err != nil {
+		return fmt.Errorf("error executing feed update")
 	}
 
 	return nil
