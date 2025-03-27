@@ -105,6 +105,8 @@ func (s *subscription) loop() {
 	var (
 		// At first, sync immediately
 		timeToFetch = time.After(0)
+		// Channel that is set to emit when a fetch starts and emits when the fetch has completed
+		fetchDone chan fetchResult
 		// Set to nil until there's updates to send to the receiver
 		updates chan []model.Entry
 		// Buffer of entries that need to be sent to the receiver after a fetch occurs
@@ -123,10 +125,20 @@ func (s *subscription) loop() {
 			// Exit the loop
 			return
 		case <-timeToFetch:
-			// TODO: Make nonblocking with another goroutine
-			entries, err := s.fetch()
-			if err != nil {
-				slog.Error("error fetching %s", "error", err)
+			// Enable the fetchDone case by initializing the channel
+			fetchDone = make(chan fetchResult)
+			// Disable starting another fetch
+			timeToFetch = nil
+
+			// Start another routine that will emit the result back
+			go func() {
+				entries, err := s.fetch()
+				fetchDone <- fetchResult{entries: entries, err: err}
+				close(fetchDone)
+			}()
+		case result := <-fetchDone:
+			if result.err != nil {
+				slog.Error("error fetching %s", "error", result.err)
 				fetchErrors += 1
 			} else {
 				// Days since last incident: 0
@@ -134,7 +146,7 @@ func (s *subscription) loop() {
 			}
 
 			// Filter out any entries already seen:
-			for _, e := range entries {
+			for _, e := range result.entries {
 				if _, ok := seen[e.GUID]; ok {
 					continue
 				}
@@ -146,6 +158,9 @@ func (s *subscription) loop() {
 			if len(send) > 0 {
 				updates = s.updates
 			}
+
+			// Disable the case to receive results
+			fetchDone = nil
 
 			// Set the next time to fetch with a backoff for number of errors (linear backoff):
 			timeToFetch = time.After(time.Duration(15+fetchErrors) * time.Minute)
@@ -176,6 +191,12 @@ type rssFeedResp struct {
 			Description string `xml:"description"`
 		} `xml:"item"`
 	} `xml:"channel"`
+}
+
+type fetchResult struct {
+	entries []model.Entry
+	err     error
+	// TODO: Something with the metadata of the feed
 }
 
 // Goes to the url and grabs the RSS feed items.
