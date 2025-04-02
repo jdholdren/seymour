@@ -7,14 +7,11 @@ package main
 import (
 	"context"
 	"embed"
-	"errors"
 	"fmt"
 	"log"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
-	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/sqlite"
@@ -22,10 +19,9 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/sethvargo/go-envconfig"
-	"golang.org/x/sync/errgroup"
+	"go.uber.org/fx"
 
 	"github.com/jdholdren/seymour/internal/agg"
-	aggdb "github.com/jdholdren/seymour/internal/agg/database"
 	"github.com/jdholdren/seymour/logger"
 )
 
@@ -56,75 +52,43 @@ func main() {
 	slog.SetDefault(l)
 
 	// Start the application
-	if err := run(ctx, cfg); err != nil {
-		slog.Error("error running", "error", err)
-		os.Exit(1)
+	fx.New(
+		fx.Supply(
+			agg.Config{
+				Port: cfg.Port,
+			},
+			cfg,
+		),
+		fx.Provide(newDB),
+		agg.Module,
+		fx.Invoke(func(agg.Server) {}), // Always start the agg server
+	).Run()
+
+	panic("")
+}
+
+func newDB(lc fx.Lifecycle, cfg config) (*sqlx.DB, error) {
+	dbx, err := sqlx.Open("sqlite", fmt.Sprintf("%s?_jounral_mode=WAL", cfg.Database))
+	if err != nil {
+		return nil, fmt.Errorf("error opening database: %s", err)
 	}
+
+	lc.Append(fx.Hook{
+		// Run migrations on startup:
+		OnStart: func(context.Context) error {
+			return migrateDB(dbx)
+		},
+		// Close the DB connection on shutdown:
+		OnStop: func(context.Context) error {
+			return dbx.Close()
+		},
+	})
+
+	return dbx, nil
 }
 
 //go:embed migrations/*.sql
 var migrationsDir embed.FS
-
-func run(ctx context.Context, cfg config) error {
-	slog.Info("running", "config", cfg)
-
-	// Connect to the db
-	dbx, err := sqlx.Open("sqlite", fmt.Sprintf("%s?_jounral_mode=WAL", cfg.Database))
-	if err != nil {
-		return fmt.Errorf("error opening database: %s", err)
-	}
-
-	// Migrate, always
-	if err := migrateDB(dbx); err != nil {
-		return fmt.Errorf("error migrating: %s", err)
-	}
-
-	aggRepo := aggdb.NewRepo(dbx)
-	syncer := agg.NewSyncer(aggRepo)
-	s := agg.NewServer(cfg.Port, aggRepo, syncer)
-
-	g, gCtx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		// Start the server
-		if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("error listening: %s", err)
-		}
-
-		return nil
-	})
-	g.Go(func() error {
-		// Block from shutting down until the group is canceled
-		<-gCtx.Done()
-
-		downCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-		if err := s.Shutdown(downCtx); err != nil {
-			slog.Error("error shutting down server", "error", err)
-		}
-
-		return nil
-	})
-	g.Go(func() error {
-		// Start the syncer with initial feeds from the db.
-		allFeeds, err := aggRepo.AllFeeds(gCtx)
-		if err != nil {
-			return fmt.Errorf("error getting all feeds: %s", err)
-		}
-
-		if err := syncer.Run(gCtx, allFeeds); err != nil {
-			return fmt.Errorf("error running syncer: %w", err)
-		}
-
-		return nil
-	})
-
-	if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-		return fmt.Errorf("error running: %s", err)
-	}
-
-	panic("") // For checking loose goroutines
-	return nil
-}
 
 func migrateDB(dbx *sqlx.DB) error {
 	d, err := iofs.New(migrationsDir, "migrations")

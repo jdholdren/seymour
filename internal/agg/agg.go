@@ -3,7 +3,9 @@
 package agg
 
 import (
+	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/jdholdren/seymour/api"
@@ -11,6 +13,7 @@ import (
 	"github.com/jdholdren/seymour/internal/agg/database"
 	"github.com/jdholdren/seymour/internal/agg/model"
 	"github.com/jdholdren/seymour/internal/server"
+	"go.uber.org/fx"
 )
 
 type (
@@ -22,21 +25,46 @@ type (
 		repo   database.Repo
 		syncer *Syncer
 	}
+
+	Config struct {
+		Port int
+	}
+
+	Params struct {
+		fx.In
+
+		Config Config
+		Repo   database.Repo
+		Syncer *Syncer
+	}
 )
 
-func NewServer(port int, repo database.Repo, syncer *Syncer) Server {
+func NewServer(lc fx.Lifecycle, p Params) Server {
 	var (
-		s, r = server.NewServer(port)
+		s, r = server.NewServer(p.Config.Port)
 	)
 	srvr := Server{
 		Server: s,
-		repo:   repo,
-		syncer: syncer,
+		repo:   p.Repo,
+		syncer: p.Syncer,
 	}
 
 	// Attach routes
 	r.HandleFunc("POST /v1/feeds", srvr.handleCreateFeed)
 	r.HandleFunc("GET /v1/feeds/{id}", srvr.handleGetFeed)
+
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			go srvr.ListenAndServe()
+
+			slog.Debug("started aggregation server", "port", p.Config.Port)
+
+			return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			return srvr.Shutdown(ctx)
+		},
+	})
 
 	return srvr
 }
