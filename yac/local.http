@@ -16,3 +16,8 @@ Content-Type: application/json
 
 @id = {{$input input id?}}
 GET /v1/feeds/{{id}}
+
+### Get an entry
+
+@id = {{$input input id?}}
+GET /v1/entries/{{id}}

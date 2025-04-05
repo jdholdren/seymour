@@ -23,6 +23,14 @@ type (
 		CreatedAt    time.Time  `json:"created_at"`
 		UpdatedAt    time.Time  `json:"updated_at"`
 	}
+
+	Entry struct {
+		ID          string `json:"id"`
+		FeedID      string `json:"feed_id"`
+		GUID        string `json:"guid"`
+		Title       string `json:"title"`
+		Description string `json:"description"`
+	}
 )
 
 // Validate checks that the body (minus logic checks) is valid.

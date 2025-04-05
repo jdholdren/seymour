@@ -52,6 +52,7 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 	// Attach routes
 	r.HandleFunc("POST /v1/feeds", srvr.handleCreateFeed)
 	r.HandleFunc("GET /v1/feeds/{id}", srvr.handleGetFeed)
+	r.HandleFunc("GET /v1/entries/{id}", srvr.handleGetEntry)
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
@@ -126,5 +127,34 @@ func (s Server) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:    feed.CreatedAt,
 		UpdatedAt:    feed.UpdatedAt,
 	}
-	server.WriteJSON(w, http.StatusCreated, resp)
+	server.WriteJSON(w, http.StatusOK, resp)
+}
+
+func (s Server) handleGetEntry(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	entry, err := s.repo.Entry(r.Context(), id)
+	if errors.Is(err, model.ErrNotFound) {
+		server.WriteJSON(w, http.StatusInternalServerError, api.Error{
+			Reason:  "not found",
+			Message: err.Error(),
+		})
+		return
+	}
+	if err != nil {
+		server.WriteJSON(w, http.StatusInternalServerError, api.Error{
+			Reason:  "internal error",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	resp := feedsv1.Entry{
+		ID:          entry.ID,
+		Title:       entry.Title,
+		Description: entry.Description,
+		FeedID:      entry.FeedID,
+		GUID:        entry.GUID,
+	}
+	server.WriteJSON(w, http.StatusOK, resp)
 }

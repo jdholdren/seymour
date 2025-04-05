@@ -72,6 +72,21 @@ func (r Repo) AllFeeds(ctx context.Context) ([]model.Feed, error) {
 	return feeds, nil
 }
 
+func (r Repo) Entry(ctx context.Context, id string) (model.Entry, error) {
+	const q = `SELECT * FROM feed_entries WHERE id = ?;`
+
+	var entry model.Entry
+	err := r.db.GetContext(ctx, &entry, q, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return model.Entry{}, model.ErrNotFound
+	}
+	if err != nil {
+		return model.Entry{}, fmt.Errorf("error fetching entry: %s", err)
+	}
+
+	return entry, nil
+}
+
 func (r Repo) InsertEntries(ctx context.Context, entries []model.Entry) error {
 	if len(entries) == 0 {
 		return nil

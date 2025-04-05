@@ -19,11 +19,12 @@ type (
 
 	// Entry represents a unique entry in an RSS feed.
 	Entry struct {
-		ID          string `db:"id"`
-		FeedID      string `db:"feed_id"`
-		GUID        string `db:"guid"`
-		Title       string `db:"title"`
-		Description string `db:"description"`
+		ID          string    `db:"id"`
+		FeedID      string    `db:"feed_id"`
+		GUID        string    `db:"guid"`
+		Title       string    `db:"title"`
+		Description string    `db:"description"`
+		CreatedAt   time.Time `db:"created_at"`
 	}
 
 	// Holds the optional feeds for updating a feed.
