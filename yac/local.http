@@ -1,23 +1,23 @@
-@host=http://localhost:4444
+@agghost=http://localhost:4444
 
 ### Health check
 
 GET /healthz
 
-### Create a feed
+### Agg: Create a feed
 
-POST /v1/feeds
+POST {{agghost}}/v1/feeds
 Content-Type: application/json
 {
     "url": "https://apenwarr.ca/log/rss.php"
 }
 
-### Get a feed
+### Agg: Get a feed
 
 @id = {{$input input id?}}
-GET /v1/feeds/{{id}}
+GET {{agghost}}/v1/feeds/{{id}}
 
-### Get an entry
+### Agg: Get an entry
 
 @id = {{$input input id?}}
-GET /v1/entries/{{id}}
+GET {{agghost}}/v1/entries/{{id}}

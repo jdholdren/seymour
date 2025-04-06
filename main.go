@@ -58,6 +58,7 @@ func main() {
 				Port: cfg.Port,
 			},
 			cfg,
+			fx.Annotate(ctx, fx.As(new(context.Context))),
 		),
 		fx.Provide(newDB),
 		agg.Module,

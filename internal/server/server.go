@@ -22,13 +22,15 @@ type (
 	}
 )
 
-func WriteJSON(w http.ResponseWriter, status int, data any) {
+func WriteJSON(w http.ResponseWriter, status int, data any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 
 	if err := json.NewEncoder(w).Encode(data); err != nil {
-		slog.Error("error writing response", "err", err)
+		return fmt.Errorf("error encoding json response: %s", err)
 	}
+
+	return nil
 }
 
 // Validator is a surface that can validate itself and return an error
@@ -76,4 +78,13 @@ func (alm accessLogWrapper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	alm.inner.ServeHTTP(w, r)
 
 	slog.Info("request completed", "method", r.Method, "path", r.URL.Path, "duration", time.Since(start))
+}
+
+// HandlerFuncE is a modified type of [http.HandlerFunc] that returns an error.
+type HandlerFuncE func(w http.ResponseWriter, r *http.Request) error
+
+func (f HandlerFuncE) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if err := f(w, r); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
 }

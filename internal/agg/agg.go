@@ -8,12 +8,13 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/jdholdren/seymour/api"
+	"go.uber.org/fx"
+
 	feedsv1 "github.com/jdholdren/seymour/api/feeds/v1"
+	seyerrs "github.com/jdholdren/seymour/errors"
 	"github.com/jdholdren/seymour/internal/agg/database"
 	"github.com/jdholdren/seymour/internal/agg/model"
 	"github.com/jdholdren/seymour/internal/server"
-	"go.uber.org/fx"
 )
 
 type (
@@ -50,9 +51,9 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 	}
 
 	// Attach routes
-	r.HandleFunc("POST /v1/feeds", srvr.handleCreateFeed)
-	r.HandleFunc("GET /v1/feeds/{id}", srvr.handleGetFeed)
-	r.HandleFunc("GET /v1/entries/{id}", srvr.handleGetEntry)
+	r.Handle("POST /v1/feeds", server.HandlerFuncE(srvr.handleCreateFeed))
+	r.Handle("GET /v1/feeds/{id}", server.HandlerFuncE(srvr.handleGetFeed))
+	r.Handle("GET /v1/entries/{id}", server.HandlerFuncE(srvr.handleGetEntry))
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
@@ -70,25 +71,20 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 	return srvr
 }
 
-func (s Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
+func (s Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) error {
 	body, err := server.DecodeValid[feedsv1.CreateFeedRequest](r.Body)
 	if err != nil {
-		server.WriteJSON(w, http.StatusBadRequest, api.Error{
-			Reason:  "invalid request",
-			Message: err.Error(),
-		})
-		return
+		return seyerrs.E(err, http.StatusBadRequest)
 	}
 
 	feed, err := s.repo.InsertFeed(r.Context(), model.Feed{
 		URL: body.URL,
 	})
+	if errors.Is(err, model.ErrConflict) {
+		return seyerrs.E(err, http.StatusConflict)
+	}
 	if err != nil {
-		server.WriteJSON(w, http.StatusInternalServerError, api.Error{
-			Reason:  "internal error", // TODO: Make these consts
-			Message: err.Error(),
-		})
-		return
+		return err
 	}
 
 	// Make sure that its added to the syncer
@@ -97,26 +93,18 @@ func (s Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 	resp := feedsv1.CreateFeedResponse{
 		ID: feed.ID,
 	}
-	server.WriteJSON(w, http.StatusCreated, resp)
+	return server.WriteJSON(w, http.StatusCreated, resp)
 }
 
-func (s Server) handleGetFeed(w http.ResponseWriter, r *http.Request) {
+func (s Server) handleGetFeed(w http.ResponseWriter, r *http.Request) error {
 	id := r.PathValue("id")
 
 	feed, err := s.repo.Feed(r.Context(), id)
 	if errors.Is(err, model.ErrNotFound) {
-		server.WriteJSON(w, http.StatusInternalServerError, api.Error{
-			Reason:  "not found",
-			Message: err.Error(),
-		})
-		return
+		return seyerrs.E(err, http.StatusNotFound)
 	}
 	if err != nil {
-		server.WriteJSON(w, http.StatusInternalServerError, api.Error{
-			Reason:  "internal error",
-			Message: err.Error(),
-		})
-		return
+		return err
 	}
 
 	resp := feedsv1.Feed{
@@ -127,26 +115,18 @@ func (s Server) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:    feed.CreatedAt,
 		UpdatedAt:    feed.UpdatedAt,
 	}
-	server.WriteJSON(w, http.StatusOK, resp)
+	return server.WriteJSON(w, http.StatusOK, resp)
 }
 
-func (s Server) handleGetEntry(w http.ResponseWriter, r *http.Request) {
+func (s Server) handleGetEntry(w http.ResponseWriter, r *http.Request) error {
 	id := r.PathValue("id")
 
 	entry, err := s.repo.Entry(r.Context(), id)
 	if errors.Is(err, model.ErrNotFound) {
-		server.WriteJSON(w, http.StatusInternalServerError, api.Error{
-			Reason:  "not found",
-			Message: err.Error(),
-		})
-		return
+		return seyerrs.E(err, http.StatusNotFound)
 	}
 	if err != nil {
-		server.WriteJSON(w, http.StatusInternalServerError, api.Error{
-			Reason:  "internal error",
-			Message: err.Error(),
-		})
-		return
+		return err
 	}
 
 	resp := feedsv1.Entry{
@@ -156,5 +136,6 @@ func (s Server) handleGetEntry(w http.ResponseWriter, r *http.Request) {
 		FeedID:      entry.FeedID,
 		GUID:        entry.GUID,
 	}
-	server.WriteJSON(w, http.StatusOK, resp)
+
+	return server.WriteJSON(w, http.StatusOK, resp)
 }

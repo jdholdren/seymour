@@ -1,9 +1,10 @@
 package v1
 
 import (
+	"net/http"
 	"time"
 
-	"github.com/jdholdren/seymour/api"
+	"github.com/jdholdren/seymour/errors"
 )
 
 type (
@@ -37,19 +38,15 @@ type (
 //
 // Returns an api.Error if the request is invalid.
 func (r CreateFeedRequest) Validate() error {
-	errs := []api.ErrorDetail{}
+	errs := []errors.Detail{}
 	if r.URL == "" {
-		errs = append(errs, api.ErrorDetail{
+		errs = append(errs, errors.Detail{
 			Field: "url",
 			Error: "url is required",
 		})
 	}
 	if len(errs) > 0 {
-		return api.Error{
-			Reason:  "invalid_request",
-			Message: "request was invalid",
-			Details: errs,
-		}
+		return errors.E("request was invalid", http.StatusBadRequest, errs)
 	}
 
 	return nil

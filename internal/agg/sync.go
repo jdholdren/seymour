@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/microcosm-cc/bluemonday"
+	"go.uber.org/fx"
 
 	"github.com/jdholdren/seymour/internal/agg/database"
 	"github.com/jdholdren/seymour/internal/agg/model"
@@ -26,11 +27,25 @@ type Syncer struct {
 	addCh chan model.Feed
 }
 
-func NewSyncer(repo database.Repo) *Syncer {
-	return &Syncer{
+func NewSyncer(rootCtx context.Context, lc fx.Lifecycle, repo database.Repo) *Syncer {
+	s := &Syncer{
 		repo:  repo,
 		addCh: make(chan model.Feed, 50),
 	}
+
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			allFeeds, err := repo.AllFeeds(ctx)
+			if err != nil {
+				return fmt.Errorf("error fetchign all feeds: %s", err)
+			}
+
+			go s.Run(rootCtx, allFeeds)
+			return nil
+		},
+	})
+
+	return s
 }
 
 // Run starts the syncer loop.
