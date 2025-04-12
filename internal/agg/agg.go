@@ -42,7 +42,7 @@ type (
 
 func NewServer(lc fx.Lifecycle, p Params) Server {
 	var (
-		s, r = server.NewServer(p.Config.Port)
+		s, r = server.NewServer("aggregator", p.Config.Port)
 	)
 	srvr := Server{
 		Server: s,

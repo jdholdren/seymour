@@ -1,4 +1,5 @@
 @agghost=http://localhost:4444
+@timehost=http://localhost:4445
 
 ### Health check
 
@@ -21,3 +22,13 @@ GET {{agghost}}/v1/feeds/{{id}}
 
 @id = {{$input input id?}}
 GET {{agghost}}/v1/entries/{{id}}
+
+### Timeline: Create a subscription
+
+@user_id = {{$input input user_id?}}
+@feed_id = {{$input input feed_id?}}
+POST {{timehost}}/v1/users/{{user_id}}/subscriptions
+Content-Type: application/json
+{
+    "feed_id": "{{feed_id}}"
+}

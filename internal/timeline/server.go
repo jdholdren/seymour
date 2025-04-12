@@ -1,3 +1,5 @@
+// Package timeline provides the service that manages a user's timeline.
+// It manages their subscriptions and builds their timeline according to preferences.
 package timeline
 
 import (
@@ -5,13 +7,12 @@ import (
 	"log/slog"
 	"net/http"
 
+	"go.uber.org/fx"
+
+	v1 "github.com/jdholdren/seymour/api/timeline/v1"
 	"github.com/jdholdren/seymour/internal/agg/database"
 	"github.com/jdholdren/seymour/internal/server"
-	"go.uber.org/fx"
 )
-
-// Package timeline provides the service that manages a user's timeline.
-// It manages their subscriptions and builds their timeline according to preferences.
 
 type (
 	// Server is an instance of the aggregation server and handles requests
@@ -34,12 +35,12 @@ type (
 )
 
 func NewServer(lc fx.Lifecycle, p Params) Server {
-	s, _ := server.NewServer(p.Config.Port)
+	s, r := server.NewServer("timeline", p.Config.Port)
 	srvr := Server{
 		Server: s,
 	}
 
-	// TODO: Attach routes
+	r.Handle("POST /v1/users/{id}/subscriptions", server.HandlerFuncE(srvr.handleCreateSubscription))
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
@@ -55,11 +56,15 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 	})
 
 	return srvr
-
 }
 
 // Attaches a subscription to the user's timeline.
 func (s Server) handleCreateSubscription(w http.ResponseWriter, r *http.Request) error {
+	_, err := server.DecodeValid[v1.CreateSubscriptionRequest](r.Body)
+	if err != nil {
+		return err
+	}
+
 	// TODO: Implement
 	return nil
 }

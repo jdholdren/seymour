@@ -2,11 +2,14 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"time"
+
+	seyerrs "github.com/jdholdren/seymour/errors"
 )
 
 type (
@@ -52,39 +55,59 @@ func DecodeValid[V Validator](r io.Reader) (V, error) {
 	return v, nil
 }
 
-func NewServer(port int) (*Server, *http.ServeMux) {
+func NewServer(name string, port int) (*Server, *http.ServeMux) {
 	m := http.NewServeMux()
 
-	// TOOD: Do other useful stuff with a base server
 	return &Server{
 		Server: http.Server{
 			Addr:         fmt.Sprintf(":%d", port),
 			ReadTimeout:  5 * time.Second,
 			WriteTimeout: 5 * time.Second,
-			Handler:      accessLogWrapper{inner: m},
+			Handler:      accessLogWrapper{serverName: name, inner: m},
 		},
 	}, m
 }
 
 // Implements [http.Handler] to wrap each call with an access log.
 type accessLogWrapper struct {
-	inner http.Handler
+	serverName string
+	inner      http.Handler
 }
 
-func (alm accessLogWrapper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	slog.Info("request received", "method", r.Method, "path", r.URL.Path)
+func (alw accessLogWrapper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	slog.Info("request received", "server", alw.serverName, "method", r.Method, "path", r.URL.Path)
 	start := time.Now()
 
-	alm.inner.ServeHTTP(w, r)
+	writer := &respCodeWriter{ResponseWriter: w}
+	alw.inner.ServeHTTP(writer, r)
 
-	slog.Info("request completed", "method", r.Method, "path", r.URL.Path, "duration", time.Since(start))
+	slog.Info("request completed", "server", alw.serverName, "method", r.Method, "path", r.URL.Path, "duration", time.Since(start), "status_code", writer.code)
+}
+
+type respCodeWriter struct {
+	http.ResponseWriter
+	code int
+}
+
+func (w *respCodeWriter) WriteHeader(code int) {
+	w.code = code
+	w.ResponseWriter.WriteHeader(code)
 }
 
 // HandlerFuncE is a modified type of [http.HandlerFunc] that returns an error.
 type HandlerFuncE func(w http.ResponseWriter, r *http.Request) error
 
 func (f HandlerFuncE) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if err := f(w, r); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	err := f(w, r)
+	if err == nil {
+		return
 	}
+
+	// Either it's already a structured error, or coerce it to one
+	sErr := &seyerrs.Error{}
+	if !errors.As(err, &sErr) {
+		sErr = seyerrs.E(http.StatusInternalServerError, err)
+	}
+
+	WriteJSON(w, sErr.Status, sErr)
 }

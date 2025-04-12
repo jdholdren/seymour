@@ -48,7 +48,7 @@ func (r Repo) Feed(ctx context.Context, id string) (model.Feed, error) {
 func (r Repo) InsertFeed(ctx context.Context, f model.Feed) (model.Feed, error) {
 	const q = `INSERT INTO feeds (id, url, title, description) VALUES (:id, :url, :title, :description);`
 
-	f.ID = fmt.Sprintf("%s%s", uuid.New().String(), feedNamespace)
+	f.ID = fmt.Sprintf("%s%s", uuid.NewString(), feedNamespace)
 	_, err := r.db.NamedExecContext(ctx, q, f)
 	if sqliteErr := (&sqlite.Error{}); errors.As(err, &sqliteErr) && sqliteErr.Code() == 2067 {
 		return model.Feed{}, fmt.Errorf("feed already exists: %w", model.ErrConflict)

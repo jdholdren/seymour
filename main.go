@@ -22,15 +22,27 @@ import (
 	"go.uber.org/fx"
 
 	"github.com/jdholdren/seymour/internal/agg"
+	"github.com/jdholdren/seymour/internal/citadel"
+	"github.com/jdholdren/seymour/internal/timeline"
 	"github.com/jdholdren/seymour/logger"
 )
 
 type config struct {
-	Port     int    `env:"PORT, default=4444"`
+	AggPort  int `env:"PORT, default=4445"`
+	TimePort int `env:"PORT, default=4446"`
+
 	Database string `env:"DATABASE, required"`
 
 	// Which format to use for logging: either text or json
 	LoggerFormat string `env:"LOGGER_FORMAT, default=text"`
+
+	// Citadel stuffs
+	CitadelPort        int    `env:"PORT, default=4444"`
+	HTTPSCookies       bool   `env:"HTTPS_COOKIES, default=false"`
+	GithubClientID     string `env:"GITHUB_CLIENT_ID, required"`
+	GithubClientSecret string `env:"GITHUB_CLIENT_SECRET, required"`
+	CookieHashKey      string `env:"COOKIE_HASH_KEY, required"`
+	CookieBlockKey     string `env:"COOKIE_BLOCK_KEY, required"`
 }
 
 func main() {
@@ -55,14 +67,28 @@ func main() {
 	fx.New(
 		fx.Supply(
 			agg.Config{
-				Port: cfg.Port,
+				Port: cfg.AggPort,
+			},
+			timeline.Config{
+				Port: cfg.TimePort,
+			},
+			citadel.Config{
+				Port:           cfg.CitadelPort,
+				CookieHashKey:  []byte(cfg.CookieHashKey),
+				CookieBlockKey: []byte(cfg.CookieBlockKey),
+				GithubClientID: cfg.GithubClientID,
+				HttpsCookies:   cfg.HTTPSCookies,
 			},
 			cfg,
 			fx.Annotate(ctx, fx.As(new(context.Context))),
 		),
 		fx.Provide(newDB),
 		agg.Module,
-		fx.Invoke(func(agg.Server) {}), // Always start the agg server
+		timeline.Module,
+		citadel.Module,
+		fx.Invoke(func(agg.Server) {}),      // Start the agg server
+		fx.Invoke(func(timeline.Server) {}), // Start the timeline server
+		fx.Invoke(func(citadel.Server) {}),  // Start the BFF server
 	).Run()
 
 	panic("")
