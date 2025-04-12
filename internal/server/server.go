@@ -81,7 +81,13 @@ func (alw accessLogWrapper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	writer := &respCodeWriter{ResponseWriter: w}
 	alw.inner.ServeHTTP(writer, r)
 
-	slog.Info("request completed", "server", alw.serverName, "method", r.Method, "path", r.URL.Path, "duration", time.Since(start), "status_code", writer.code)
+	slog.Info("request completed",
+		"server", alw.serverName,
+		"method", r.Method,
+		"url", r.URL.String(),
+		"duration", time.Since(start),
+		"status_code", writer.code,
+	)
 }
 
 type respCodeWriter struct {
