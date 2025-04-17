@@ -91,7 +91,9 @@ func (s Server) handleViewer(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	return server.WriteJSON(w, http.StatusOK, v1.Viewer{
-		UserID: usr.ID,
+		UserID:    usr.ID,
+		Email:     usr.Email,
+		CreatedAt: usr.CreatedAt,
 	})
 }
 
@@ -232,7 +234,7 @@ func (s Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) error 
 	}
 
 	// Ensure they're created and redirect back
-	usr, err := s.userRepo.ensureUser(r.Context(), user{GithubID: details.Login})
+	usr, err := s.userRepo.ensureUser(r.Context(), user{GithubID: details.Login, Email: details.Email})
 	if err != nil {
 		return err
 	}
@@ -240,6 +242,6 @@ func (s Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) error 
 	// Issue an update to their session so they're logged in
 	s.setSession(w, session{UserID: usr.ID})
 
-	http.Redirect(w, r, "/welcome?error="+url.QueryEscape(errMsg), http.StatusFound)
+	http.Redirect(w, r, "/", http.StatusFound)
 	return nil
 }

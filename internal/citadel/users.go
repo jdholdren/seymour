@@ -23,7 +23,7 @@ func (ur userRepo) ensureUser(ctx context.Context, usr user) (user, error) {
 		return user{}, err
 	}
 
-	return ur.user(ctx, usr.ID)
+	return ur.userByGithubID(ctx, usr.GithubID)
 }
 
 func (ur userRepo) user(ctx context.Context, id string) (user, error) {
@@ -31,6 +31,17 @@ func (ur userRepo) user(ctx context.Context, id string) (user, error) {
 
 	var usr user
 	if err := ur.db.GetContext(ctx, &usr, q, id); err != nil {
+		return user{}, err
+	}
+
+	return usr, nil
+}
+
+func (ur userRepo) userByGithubID(ctx context.Context, githubID string) (user, error) {
+	const q = `SELECT * FROM users WHERE github_id = ?;`
+
+	var usr user
+	if err := ur.db.GetContext(ctx, &usr, q, githubID); err != nil {
 		return user{}, err
 	}
 
