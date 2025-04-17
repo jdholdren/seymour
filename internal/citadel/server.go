@@ -14,6 +14,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/fx"
 
+	v1 "github.com/jdholdren/seymour/api/citadel/v1"
 	"github.com/jdholdren/seymour/internal/server"
 )
 
@@ -38,14 +39,13 @@ type (
 		HttpsCookies       bool
 		GithubClientID     string
 		GithubClientSecret string
-
-		DB *sqlx.DB
 	}
 
 	Params struct {
 		fx.In
 
 		Config Config
+		DB     *sqlx.DB
 	}
 )
 
@@ -57,7 +57,7 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 		httpsCookies: p.Config.HttpsCookies,
 		ghID:         p.Config.GithubClientID,
 		ghSecret:     p.Config.GithubClientSecret,
-		userRepo:     userRepo{db: p.Config.DB},
+		userRepo:     userRepo{db: p.DB},
 	}
 
 	r.Handle("GET /api/viewer", server.HandlerFuncE(srvr.handleViewer))
@@ -81,7 +81,18 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 }
 
 func (s Server) handleViewer(w http.ResponseWriter, r *http.Request) error {
-	return server.WriteJSON(w, http.StatusOK, struct{}{})
+	sess := s.session(r)
+	if sess.UserID == "" {
+		return server.WriteJSON(w, http.StatusOK, struct{}{})
+	}
+	usr, err := s.userRepo.user(r.Context(), sess.UserID)
+	if err != nil {
+		return err
+	}
+
+	return server.WriteJSON(w, http.StatusOK, v1.Viewer{
+		UserID: usr.ID,
+	})
 }
 
 // Redirects the user to the SSO login page.
@@ -90,22 +101,15 @@ func (s Server) handleSSORedirect(w http.ResponseWriter, r *http.Request) error 
 	session := session{
 		State: uuid.NewString(),
 	}
-	if encoded, err := s.secureCookie.Encode(sessionCookieName, session); err == nil {
-		cookie := &http.Cookie{
-			Name:     sessionCookieName,
-			Value:    encoded,
-			Path:     "/",
-			Secure:   s.httpsCookies,
-			HttpOnly: true,
-		}
-		http.SetCookie(w, cookie)
-	}
+	s.setSession(w, session)
 
 	u, _ := url.Parse("https://github.com/login/oauth/authorize")
 	v := u.Query()
 	v.Set("client_id", s.ghID)
 	v.Set("state", session.State)
+	v.Set("scope", "read:org")
 	u.RawQuery = v.Encode()
+
 	http.Redirect(w, r, u.String(), http.StatusTemporaryRedirect)
 	return nil
 }
@@ -131,7 +135,6 @@ func (s Server) fetchGithubDetails(ctx context.Context, code string) (githubUser
 		ClientID:     s.ghID,
 		ClientSecret: s.ghSecret,
 	})
-	fmt.Println(string(byts))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://github.com/login/oauth/access_token", bytes.NewReader(byts))
 	if err != nil {
 		return githubUserData{}, false, fmt.Errorf("error creating access token request: %w", err)
@@ -206,7 +209,12 @@ func (s Server) fetchGithubDetails(ctx context.Context, code string) (githubUser
 //
 // I think everything here should redirect?
 func (s Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) error {
-	// TODO: Check the state and error
+	// Check the state and error
+	sess := s.session(r)
+	if r.URL.Query().Get("state") != sess.State {
+		http.Redirect(w, r, "/welcome?error="+url.QueryEscape("invalid_state"), http.StatusFound)
+		return nil
+	}
 
 	// Fetch user's details
 	var errMsg string
@@ -224,10 +232,14 @@ func (s Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) error 
 	}
 
 	// Ensure they're created and redirect back
-	if err := s.userRepo.ensureUser(r.Context(), user{GithubID: details.Login}); err != nil {
+	usr, err := s.userRepo.ensureUser(r.Context(), user{GithubID: details.Login})
+	if err != nil {
 		return err
 	}
-	// TODO: Issue an update to their session
 
+	// Issue an update to their session so they're logged in
+	s.setSession(w, session{UserID: usr.ID})
+
+	http.Redirect(w, r, "/welcome?error="+url.QueryEscape(errMsg), http.StatusFound)
 	return nil
 }

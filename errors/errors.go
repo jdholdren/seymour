@@ -1,6 +1,7 @@
 package errors
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -8,9 +9,9 @@ import (
 
 // Error represents a universal error type between the services.
 type Error struct {
-	Status  int      `json:"-"`
-	Err     error    `json:"message"` // The error this wraps
-	Details []Detail `json:"details"`
+	Status  int
+	Err     error // The error this wraps
+	Details []Detail
 }
 
 type Detail struct {
@@ -20,6 +21,16 @@ type Detail struct {
 
 func (e *Error) Error() string {
 	return fmt.Sprintf("%d: %s, details: %v", e.Status, e.Err, e.Details)
+}
+
+func (s *Error) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Message string   `json:"message"`
+		Details []Detail `json:"details"`
+	}{
+		Message: s.Err.Error(),
+		Details: s.Details,
+	})
 }
 
 func E(args ...any) *Error {
