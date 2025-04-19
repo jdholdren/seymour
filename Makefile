@@ -1,10 +1,11 @@
 .PHONY: start yac
 
-# TODO: Add a target for binary
-
 # Runs the server binary
 start:
 	go run .
+
+start-temporal:
+	temporal server start-dev --db-filename temporal.db
 
 yac:
 	httpyac ./yac/local.http -i

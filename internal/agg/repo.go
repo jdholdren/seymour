@@ -1,4 +1,4 @@
-package database
+package agg
 
 import (
 	"context"
@@ -10,8 +10,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"modernc.org/sqlite"
+)
 
-	"github.com/jdholdren/seymour/internal/agg/model"
+var (
+	errConflict = errors.New("resource already exists")
+	errNotFound = errors.New("resource not found")
 )
 
 const (
@@ -31,40 +34,43 @@ func NewRepo(dbx *sqlx.DB) Repo {
 	}
 }
 
-func (r Repo) Feed(ctx context.Context, id string) (model.Feed, error) {
+func (r Repo) Feed(ctx context.Context, id string) (Feed, error) {
 	const q = `SELECT * FROM feeds WHERE id = ?;`
-	var feed model.Feed
+	var feed Feed
 	err := r.db.GetContext(ctx, &feed, q, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return model.Feed{}, model.ErrNotFound
+		return Feed{}, errNotFound
 	}
 	if err != nil {
-		return model.Feed{}, fmt.Errorf("error fetching feed: %s", err)
+		return Feed{}, fmt.Errorf("error fetching feed: %s", err)
 	}
 
 	return feed, nil
 }
 
-func (r Repo) InsertFeed(ctx context.Context, f model.Feed) (model.Feed, error) {
-	const q = `INSERT INTO feeds (id, url, title, description) VALUES (:id, :url, :title, :description);`
+func (r Repo) InsertFeed(ctx context.Context, url string) (Feed, error) {
+	const q = `INSERT INTO feeds (id, url) VALUES (:id, :url);`
 
-	f.ID = fmt.Sprintf("%s%s", uuid.NewString(), feedNamespace)
+	f := Feed{
+		ID:  fmt.Sprintf("%s%s", uuid.NewString(), feedNamespace),
+		URL: url,
+	}
 	_, err := r.db.NamedExecContext(ctx, q, f)
 	if sqliteErr := (&sqlite.Error{}); errors.As(err, &sqliteErr) && sqliteErr.Code() == 2067 {
-		return model.Feed{}, fmt.Errorf("feed already exists: %w", model.ErrConflict)
+		return Feed{}, fmt.Errorf("feed already exists: %w", errConflict)
 	}
 	if err != nil {
-		return model.Feed{}, fmt.Errorf("error inserting feed: %s", err)
+		return Feed{}, fmt.Errorf("error inserting feed: %s", err)
 	}
 
 	return r.Feed(ctx, f.ID)
 }
 
 // AllFeeds retrieves _all_ feeds from the database.
-func (r Repo) AllFeeds(ctx context.Context) ([]model.Feed, error) {
+func (r Repo) AllFeeds(ctx context.Context) ([]Feed, error) {
 	const q = "SELECT * FROM feeds;"
 
-	var feeds []model.Feed
+	var feeds []Feed
 	if err := r.db.SelectContext(ctx, &feeds, q); err != nil {
 		return nil, fmt.Errorf("error selecting all feeds: %s", err)
 	}
@@ -72,22 +78,22 @@ func (r Repo) AllFeeds(ctx context.Context) ([]model.Feed, error) {
 	return feeds, nil
 }
 
-func (r Repo) Entry(ctx context.Context, id string) (model.Entry, error) {
+func (r Repo) Entry(ctx context.Context, id string) (Entry, error) {
 	const q = `SELECT * FROM feed_entries WHERE id = ?;`
 
-	var entry model.Entry
+	var entry Entry
 	err := r.db.GetContext(ctx, &entry, q, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return model.Entry{}, model.ErrNotFound
+		return Entry{}, errNotFound
 	}
 	if err != nil {
-		return model.Entry{}, fmt.Errorf("error fetching entry: %s", err)
+		return Entry{}, fmt.Errorf("error fetching entry: %s", err)
 	}
 
 	return entry, nil
 }
 
-func (r Repo) InsertEntries(ctx context.Context, entries []model.Entry) error {
+func (r Repo) InsertEntries(ctx context.Context, entries []Entry) error {
 	if len(entries) == 0 {
 		return nil
 	}
@@ -107,7 +113,7 @@ func (r Repo) InsertEntries(ctx context.Context, entries []model.Entry) error {
 	return nil
 }
 
-func (r Repo) UpdateFeed(ctx context.Context, id string, args model.UpdateFeedArgs) error {
+func (r Repo) UpdateFeed(ctx context.Context, id string, args UpdateFeedArgs) error {
 	q := sq.Update("feeds")
 	if args.Title != "" {
 		q = q.Set("title", args.Title)

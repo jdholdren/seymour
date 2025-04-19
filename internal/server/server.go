@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	seyerrs "github.com/jdholdren/seymour/errors"
+	seyerrs "github.com/jdholdren/seymour/internal/errors"
 )
 
 type (

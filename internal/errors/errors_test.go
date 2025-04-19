@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	seyerrs "github.com/jdholdren/seymour/errors"
+	seyerrs "github.com/jdholdren/seymour/internal/errors"
 	"github.com/stretchr/testify/assert"
 )
 

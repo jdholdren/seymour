@@ -15,6 +15,7 @@ import (
 	"go.uber.org/fx"
 
 	v1 "github.com/jdholdren/seymour/api/citadel/v1"
+	"github.com/jdholdren/seymour/internal/agg"
 	"github.com/jdholdren/seymour/internal/server"
 )
 
@@ -24,6 +25,7 @@ type (
 	Server struct {
 		*server.Server
 		userRepo userRepo
+		agg      agg.Service
 
 		ghID     string
 		ghSecret string
@@ -46,6 +48,7 @@ type (
 
 		Config Config
 		DB     *sqlx.DB
+		Agg    agg.Service
 	}
 )
 
@@ -58,11 +61,15 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 		ghID:         p.Config.GithubClientID,
 		ghSecret:     p.Config.GithubClientSecret,
 		userRepo:     userRepo{db: p.DB},
+		agg:          p.Agg,
 	}
 
 	r.Handle("GET /api/viewer", server.HandlerFuncE(srvr.handleViewer))
 	r.Handle("GET /api/sso-login", server.HandlerFuncE(srvr.handleSSORedirect))
 	r.Handle("GET /api/sso-callback", server.HandlerFuncE(srvr.handleSSOCallback))
+
+	// TODO: Require a session
+	r.Handle("GET /api/feeds/{feedID}/entries", server.HandlerFuncE(srvr.handleListEntries))
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
@@ -81,7 +88,7 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 }
 
 func (s Server) handleViewer(w http.ResponseWriter, r *http.Request) error {
-	sess := s.session(r)
+	sess := session(r, s.secureCookie)
 	if sess.UserID == "" {
 		return server.WriteJSON(w, http.StatusOK, struct{}{})
 	}
@@ -100,15 +107,15 @@ func (s Server) handleViewer(w http.ResponseWriter, r *http.Request) error {
 // Redirects the user to the SSO login page.
 func (s Server) handleSSORedirect(w http.ResponseWriter, r *http.Request) error {
 	// Create a state to store as part of the flow
-	session := session{
+	state := sessionState{
 		State: uuid.NewString(),
 	}
-	s.setSession(w, session)
+	setSession(w, s.secureCookie, s.httpsCookies, state)
 
 	u, _ := url.Parse("https://github.com/login/oauth/authorize")
 	v := u.Query()
 	v.Set("client_id", s.ghID)
-	v.Set("state", session.State)
+	v.Set("state", state.State)
 	v.Set("scope", "read:org")
 	u.RawQuery = v.Encode()
 
@@ -212,7 +219,7 @@ func (s Server) fetchGithubDetails(ctx context.Context, code string) (githubUser
 // I think everything here should redirect?
 func (s Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) error {
 	// Check the state and error
-	sess := s.session(r)
+	sess := session(r, s.secureCookie)
 	if r.URL.Query().Get("state") != sess.State {
 		http.Redirect(w, r, "/welcome?error="+url.QueryEscape("invalid_state"), http.StatusFound)
 		return nil
@@ -240,7 +247,7 @@ func (s Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) error 
 	}
 
 	// Issue an update to their session so they're logged in
-	s.setSession(w, session{UserID: usr.ID})
+	setSession(w, s.secureCookie, s.httpsCookies, sessionState{UserID: usr.ID})
 
 	http.Redirect(w, r, "/", http.StatusFound)
 	return nil

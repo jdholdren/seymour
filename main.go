@@ -19,11 +19,12 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/sethvargo/go-envconfig"
+	"go.temporal.io/sdk/worker"
 	"go.uber.org/fx"
 
 	"github.com/jdholdren/seymour/internal/agg"
 	"github.com/jdholdren/seymour/internal/citadel"
-	"github.com/jdholdren/seymour/internal/timeline"
+	"github.com/jdholdren/seymour/internal/tempest"
 	"github.com/jdholdren/seymour/logger"
 )
 
@@ -66,12 +67,6 @@ func main() {
 	// Start the application
 	fx.New(
 		fx.Supply(
-			agg.Config{
-				Port: cfg.AggPort,
-			},
-			timeline.Config{
-				Port: cfg.TimePort,
-			},
 			citadel.Config{
 				Port:               cfg.CitadelPort,
 				CookieHashKey:      []byte(cfg.CookieHashKey),
@@ -85,14 +80,11 @@ func main() {
 		),
 		fx.Provide(newDB),
 		agg.Module,
-		timeline.Module,
 		citadel.Module,
-		fx.Invoke(func(agg.Server) {}),      // Start the agg server
-		fx.Invoke(func(timeline.Server) {}), // Start the timeline server
-		fx.Invoke(func(citadel.Server) {}),  // Start the BFF server
+		tempest.Module,
+		fx.Invoke(func(citadel.Server) {}), // Start the BFF server
+		fx.Invoke(func(worker.Worker) {}),  // Start the temporal worker
 	).Run()
-
-	panic("")
 }
 
 func newDB(lc fx.Lifecycle, cfg config) (*sqlx.DB, error) {

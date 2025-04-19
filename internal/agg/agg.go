@@ -5,137 +5,83 @@ package agg
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net/http"
+	"time"
 
 	"go.uber.org/fx"
 
-	feedsv1 "github.com/jdholdren/seymour/api/feeds/v1"
-	seyerrs "github.com/jdholdren/seymour/errors"
-	"github.com/jdholdren/seymour/internal/agg/database"
-	"github.com/jdholdren/seymour/internal/agg/model"
-	"github.com/jdholdren/seymour/internal/server"
+	seyerrs "github.com/jdholdren/seymour/internal/errors"
+)
+
+type (
+	// Feed represents an RSS feed's details.
+	Feed struct {
+		ID           string     `db:"id"`
+		Title        string     `db:"title"`
+		URL          string     `db:"url"`
+		Description  string     `db:"description"`
+		LastSyncedAt *time.Time `db:"last_synced_at"`
+		CreatedAt    time.Time  `db:"created_at"`
+		UpdatedAt    time.Time  `db:"updated_at"`
+	}
+
+	// Entry represents a unique entry in an RSS feed.
+	Entry struct {
+		ID          string    `db:"id"`
+		FeedID      string    `db:"feed_id"`
+		GUID        string    `db:"guid"`
+		Title       string    `db:"title"`
+		Description string    `db:"description"`
+		CreatedAt   time.Time `db:"created_at"`
+	}
+
+	// Holds the optional feeds for updating a feed.
+	UpdateFeedArgs struct {
+		Title       string
+		Description string
+		LastSynced  time.Time
+	}
 )
 
 type (
 	// Server is an instance of the aggregation server and handles requests
 	// to search feeds or add new ones for ingestion.
-	Server struct {
-		*server.Server
-
-		repo   database.Repo
-		syncer *Syncer
-	}
-
-	Config struct {
-		Port int
+	Service struct {
+		repo Repo
 	}
 
 	Params struct {
 		fx.In
 
-		Config Config
-		Repo   database.Repo
-		Syncer *Syncer
+		Repo Repo
 	}
 )
 
-func NewServer(lc fx.Lifecycle, p Params) Server {
-	var (
-		s, r = server.NewServer("aggregator", p.Config.Port)
-	)
-	srvr := Server{
-		Server: s,
-		repo:   p.Repo,
-		syncer: p.Syncer,
+func NewService(lc fx.Lifecycle, p Params) Service {
+	return Service{
+		repo: p.Repo,
 	}
-
-	// Attach routes
-	r.Handle("POST /v1/feeds", server.HandlerFuncE(srvr.handleCreateFeed))
-	r.Handle("GET /v1/feeds/{id}", server.HandlerFuncE(srvr.handleGetFeed))
-	r.Handle("GET /v1/entries/{id}", server.HandlerFuncE(srvr.handleGetEntry))
-
-	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
-			go srvr.ListenAndServe()
-
-			slog.Debug("started aggregation server", "port", p.Config.Port)
-
-			return nil
-		},
-		OnStop: func(ctx context.Context) error {
-			return srvr.Shutdown(ctx)
-		},
-	})
-
-	return srvr
 }
 
-func (s Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) error {
-	body, err := server.DecodeValid[feedsv1.CreateFeedRequest](r.Body)
-	if err != nil {
-		return seyerrs.E(err, http.StatusBadRequest)
-	}
-
-	feed, err := s.repo.InsertFeed(r.Context(), model.Feed{
-		URL: body.URL,
-	})
-	if errors.Is(err, model.ErrConflict) {
-		return seyerrs.E(err, http.StatusConflict)
+func (s Service) CreateFeed(ctx context.Context, url string) (Feed, error) {
+	feed, err := s.repo.InsertFeed(ctx, url)
+	if errors.Is(err, errConflict) {
+		return Feed{}, seyerrs.E(err, http.StatusConflict)
 	}
 	if err != nil {
-		return err
+		return Feed{}, seyerrs.E(err)
 	}
 
-	// Make sure that its added to the syncer
-	s.syncer.AddFeed(feed)
+	// TODO: Enqueue a job to sync the feed
 
-	resp := feedsv1.CreateFeedResponse{
-		ID: feed.ID,
-	}
-	return server.WriteJSON(w, http.StatusCreated, resp)
+	return feed, nil
 }
 
-func (s Server) handleGetFeed(w http.ResponseWriter, r *http.Request) error {
-	id := r.PathValue("id")
-
-	feed, err := s.repo.Feed(r.Context(), id)
-	if errors.Is(err, model.ErrNotFound) {
-		return seyerrs.E(err, http.StatusNotFound)
-	}
+func (s Service) Feeds(ctx context.Context) ([]Feed, error) {
+	feeds, err := s.repo.AllFeeds(ctx)
 	if err != nil {
-		return err
+		return nil, seyerrs.E(err)
 	}
 
-	resp := feedsv1.Feed{
-		ID:           feed.ID,
-		Title:        feed.Title,
-		Description:  feed.Description,
-		LastSyncedAt: feed.LastSyncedAt,
-		CreatedAt:    feed.CreatedAt,
-		UpdatedAt:    feed.UpdatedAt,
-	}
-	return server.WriteJSON(w, http.StatusOK, resp)
-}
-
-func (s Server) handleGetEntry(w http.ResponseWriter, r *http.Request) error {
-	id := r.PathValue("id")
-
-	entry, err := s.repo.Entry(r.Context(), id)
-	if errors.Is(err, model.ErrNotFound) {
-		return seyerrs.E(err, http.StatusNotFound)
-	}
-	if err != nil {
-		return err
-	}
-
-	resp := feedsv1.Entry{
-		ID:          entry.ID,
-		Title:       entry.Title,
-		Description: entry.Description,
-		FeedID:      entry.FeedID,
-		GUID:        entry.GUID,
-	}
-
-	return server.WriteJSON(w, http.StatusOK, resp)
+	return feeds, nil
 }
