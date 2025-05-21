@@ -25,6 +25,7 @@ import (
 	"github.com/jdholdren/seymour/internal/agg"
 	"github.com/jdholdren/seymour/internal/citadel"
 	"github.com/jdholdren/seymour/internal/tempest"
+	"github.com/jdholdren/seymour/internal/timeline"
 	"github.com/jdholdren/seymour/logger"
 )
 
@@ -82,6 +83,7 @@ func main() {
 		agg.Module,
 		citadel.Module,
 		tempest.Module,
+		timeline.Module,
 		fx.Invoke(func(citadel.Server) {}), // Start the BFF server
 		fx.Invoke(func(worker.Worker) {}),  // Start the temporal worker
 	).Run()

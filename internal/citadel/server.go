@@ -69,7 +69,9 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 	r.Handle("GET /api/sso-callback", server.HandlerFuncE(srvr.handleSSOCallback))
 
 	// TODO: Require a session
-	r.Handle("GET /api/feeds/{feedID}/entries", server.HandlerFuncE(srvr.handleListEntries))
+	authed := http.NewServeMux()
+	authed.Handle("POST /api/subscriptions", server.HandlerFuncE(srvr.handleCreateSubscription))
+	r.Handle("/", requireSessionMiddleware{inner: authed, secureCookie: srvr.secureCookie})
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {

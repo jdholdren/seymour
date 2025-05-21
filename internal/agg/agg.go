@@ -57,7 +57,7 @@ type (
 	}
 )
 
-func NewService(lc fx.Lifecycle, p Params) Service {
+func NewService(p Params) Service {
 	return Service{
 		repo: p.Repo,
 	}
