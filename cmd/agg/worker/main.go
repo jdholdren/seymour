@@ -18,7 +18,8 @@ import (
 )
 
 type config struct {
-	Database string `env:"DATABASE, required"`
+	Database         string `env:"DATABASE, required"`
+	TemporalHostPort string `env:"TEMPORAL_HOST_PORT, required"`
 }
 
 func main() {
@@ -41,7 +42,9 @@ func main() {
 	}
 	defer dbx.Close()
 
-	c, err := client.Dial(client.Options{})
+	c, err := client.Dial(client.Options{
+		HostPort: cfg.TemporalHostPort,
+	})
 	if err != nil {
 		log.Fatalln("Unable to create Temporal client:", err)
 	}

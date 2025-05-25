@@ -1,5 +1,5 @@
 services:
-  agg:
+  agg_worker:
     build:
       context: .
       dockerfile: ./Dockerfile
@@ -7,8 +7,11 @@ services:
         MAIN_PATH: ./cmd/agg/worker
     environment:
       - DATABASE=/data/citadel.sqlite
+      - TEMPORAL_HOST_PORT=host.docker.internal:7233
     volumes:
       - ./data/agg_worker:/data
+    depends_on:
+      - temporal
   citadel:
     build:
       context: .

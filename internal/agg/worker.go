@@ -43,7 +43,8 @@ func RunWorker(ctx context.Context, repo db.Repo, cli client.Client) error {
 
 	intChan := make(chan any)
 	go func() {
-		intChan <- ctx.Done()
+		<-ctx.Done()
+		close(intChan)
 	}()
 
 	return w.Run(intChan)
