@@ -14,7 +14,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/fx"
 
-	v1 "github.com/jdholdren/seymour/api/citadel/v1"
+	api "github.com/jdholdren/seymour/api/citadel"
 	"github.com/jdholdren/seymour/internal/agg"
 	"github.com/jdholdren/seymour/internal/server"
 )
@@ -41,6 +41,8 @@ type (
 		HttpsCookies       bool
 		GithubClientID     string
 		GithubClientSecret string
+
+		DebugEndpoints bool
 	}
 
 	Params struct {
@@ -66,8 +68,17 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 	r.Handle("GET /api/sso-login", server.HandlerFuncE(srvr.handleSSORedirect))
 	r.Handle("GET /api/sso-callback", server.HandlerFuncE(srvr.handleSSOCallback))
 
-	authed := http.NewServeMux()
-	authed.Handle("POST /api/subscriptions", server.HandlerFuncE(srvr.handleCreateSubscription))
+	if p.Config.DebugEndpoints {
+		// For local testing
+		r.Handle("POST /api/login", server.HandlerFuncE(srvr.handleDebugLogin))
+	}
+
+	subs := requireSessionMux{
+		ServeMux:     http.NewServeMux(),
+		secureCookie: srvr.secureCookie,
+	}
+	subs.Handle("POST /", server.HandlerFuncE(srvr.handleCreateSubscription))
+	r.Handle("/api/subscriptions", http.StripPrefix("/api/subscriptions", subs)) // BUG: This is causing a 404 to become a 401
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
@@ -81,8 +92,10 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 			return srvr.Shutdown(ctx)
 		},
 	})
-
 	return srvr
+}
+
+func (s Server) HandleFuncE(pattern string, handler server.HandlerFuncE) {
 }
 
 func (s Server) handleViewer(w http.ResponseWriter, r *http.Request) error {
@@ -95,7 +108,7 @@ func (s Server) handleViewer(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	return server.WriteJSON(w, http.StatusOK, v1.Viewer{
+	return server.WriteJSON(w, http.StatusOK, api.Viewer{
 		UserID:    usr.ID,
 		Email:     usr.Email,
 		CreatedAt: usr.CreatedAt,
@@ -248,5 +261,16 @@ func (s Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) error 
 	setSession(w, s.secureCookie, s.httpsCookies, sessionState{UserID: usr.ID})
 
 	http.Redirect(w, r, "/", http.StatusFound)
+	return nil
+}
+
+func (s Server) handleDebugLogin(w http.ResponseWriter, r *http.Request) error {
+	var body api.DebugLogin
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		return err
+	}
+
+	// Issue an update to their session so they're logged in
+	setSession(w, s.secureCookie, s.httpsCookies, sessionState{UserID: body.UserID})
 	return nil
 }

@@ -2,17 +2,20 @@ services:
   citadel:
     build:
       context: .
-      dockerfile: ./cmd/citadel/Dockerfile
+      dockerfile: ./Dockerfile
+      args:
+        MAIN_PATH: ./cmd/citadel
     ports:
       - "4444:4444"
     environment:
-      - DATABASE=/data/seymour.db
+      - DATABASE=/data/citadel.sqlite
       - PORT=4444
       - HTTPS_COOKIES=false
       - GITHUB_CLIENT_ID=something
       - GITHUB_CLIENT_SECRET=something
-      - COOKIE_HASH_KEY=soemthing
-      - COOKIE_BLOCK_KEY=something
+      - COOKIE_HASH_KEY=aBcDeFgHiJkLmNoP
+      - COOKIE_BLOCK_KEY=aBcDeFgHiJkLmNoP
+      - DEBUG_ENDPOINTS=true
     volumes:
       - ./data/citadel:/data
 

@@ -53,17 +53,22 @@ func setSession(w http.ResponseWriter, secureCookie *securecookie.SecureCookie, 
 }
 
 // Requires that the request is authenticated.
-type requireSessionMiddleware struct {
-	inner        http.Handler
+type requireSessionMux struct {
+	*http.ServeMux
 	secureCookie *securecookie.SecureCookie
 }
 
-func (m requireSessionMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (m requireSessionMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/" {
+		// It's a fallback
+		return
+	}
+
 	state := session(r, m.secureCookie)
 	if state.UserID == "" {
 		http.Error(w, "Unauthenticated", http.StatusUnauthorized)
 		return
 	}
 
-	m.inner.ServeHTTP(w, r)
+	m.ServeMux.ServeHTTP(w, r)
 }

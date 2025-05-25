@@ -8,3 +8,7 @@ type Viewer struct {
 	Email     string    `json:"email"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+type DebugLogin struct {
+	UserID string `json:"user_id"`
+}

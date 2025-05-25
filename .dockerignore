@@ -1,0 +1,4 @@
+/data
+docker-compose.yml
+Makefile
+*.md

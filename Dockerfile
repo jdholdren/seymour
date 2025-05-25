@@ -1,11 +1,11 @@
 FROM golang:1.24-alpine AS builder
 
+ARG MAIN_PATH
+
 WORKDIR /app
 
 RUN apk update \
-    && apk add --no-cache git \
     && apk add --no-cache ca-certificates \
-    && apk add --update gcc musl-dev \
     && update-ca-certificates
 
 # Copy go mod and sum files
@@ -16,7 +16,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=1 GOOS=linux go build -a -o citadel ./cmd/citadel
+RUN CGO_ENABLED=0 GOOS=linux go build -a -o server $MAIN_PATH
 
 FROM alpine:latest
 
@@ -25,7 +25,7 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 WORKDIR /app
 
 # Copy binary from builder stage
-COPY --from=builder /app/citadel .
+COPY --from=builder /app/server .
 
 RUN ls
 
@@ -33,4 +33,4 @@ RUN ls
 EXPOSE 4444
 
 # Run the application
-CMD ["./citadel"]
+CMD ["./server"]
