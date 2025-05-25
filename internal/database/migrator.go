@@ -12,8 +12,8 @@ import (
 )
 
 // RunMigrations performs all migrations in the given filesystem.
-func RunMigrations(dbx *sqlx.DB, fs fs.FS) error {
-	d, err := iofs.New(fs, "migrations")
+func RunMigrations(dbx *sqlx.DB, fs fs.FS, dirName string) error {
+	d, err := iofs.New(fs, dirName)
 	if err != nil {
 		return fmt.Errorf("error creating migrations source: %s", err)
 	}

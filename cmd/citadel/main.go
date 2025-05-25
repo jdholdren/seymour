@@ -23,13 +23,13 @@ type config struct {
 
 	Port               int    `env:"PORT, default=4444"`
 	HTTPSCookies       bool   `env:"HTTPS_COOKIES, default=false"`
-	GithubClientID     string `env:"GITHUB_CLIENT_ID, required"`
-	GithubClientSecret string `env:"GITHUB_CLIENT_SECRET, required"`
-	CookieHashKey      string `env:"COOKIE_HASH_KEY, required"`
-	CookieBlockKey     string `env:"COOKIE_BLOCK_KEY, required"`
+	GithubClientID     string `env:"GITHUB_CLIENT_ID"`
+	GithubClientSecret string `env:"GITHUB_CLIENT_SECRET"`
+	CookieHashKey      string `env:"COOKIE_HASH_KEY"`
+	CookieBlockKey     string `env:"COOKIE_BLOCK_KEY"`
 }
 
-// go:embed migrations/*.sql
+//go:embed migrations/*.sql
 var migrations embed.FS
 
 func main() {
@@ -53,7 +53,7 @@ func main() {
 	defer dbx.Close()
 
 	// Run all migrations
-	if err := database.RunMigrations(dbx, migrations); err != nil {
+	if err := database.RunMigrations(dbx, migrations, "migrations"); err != nil {
 		log.Fatalf("error running migrations: %s", err)
 	}
 
