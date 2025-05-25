@@ -1,14 +1,15 @@
-package tempest
+package agg
 
 import (
+	"log/slog"
 	"time"
 
-	"log/slog"
-
-	"github.com/jdholdren/seymour/internal/agg"
+	"github.com/jdholdren/seymour/internal/agg/db"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
+
+type workflows struct{}
 
 func (workflows) SyncIndividual(ctx workflow.Context, feedID string) error {
 	options := workflow.ActivityOptions{
@@ -21,10 +22,7 @@ func (workflows) SyncIndividual(ctx workflow.Context, feedID string) error {
 	}
 	ctx = workflow.WithActivityOptions(ctx, options)
 
-	slog.Info("starting sync feed workflow", "feed_id", feedID)
-
-	a := activities{}
-	return workflow.ExecuteActivity(ctx, a.SyncRSSFeed, feedID).Get(ctx, nil)
+	return workflow.ExecuteActivity(ctx, acts.SyncFeed, feedID).Get(ctx, nil)
 }
 
 func (workflows) SyncAll(ctx workflow.Context) error {
@@ -39,8 +37,8 @@ func (workflows) SyncAll(ctx workflow.Context) error {
 	ctx = workflow.WithActivityOptions(ctx, options)
 	a := activities{}
 
-	var feeds []agg.Feed
-	if err := workflow.ExecuteActivity(ctx, a.AllRSSFeeds).Get(ctx, &feeds); err != nil {
+	var feeds []db.Feed
+	if err := workflow.ExecuteActivity(ctx, acts.AllFeeds).Get(ctx, &feeds); err != nil {
 		slog.Error("failed to sync all feeds", "error", err)
 		return err
 	}
@@ -51,7 +49,7 @@ func (workflows) SyncAll(ctx workflow.Context) error {
 		workflow.Go(ctx, func(ctx workflow.Context) {
 			defer wg.Done()
 
-			if err := workflow.ExecuteActivity(ctx, a.SyncRSSFeed, feed.ID).Get(ctx, nil); err != nil {
+			if err := workflow.ExecuteActivity(ctx, a.SyncFeed, feed.ID).Get(ctx, nil); err != nil {
 				slog.Error("failed to sync feed", "feed_id", feed.ID, "error", err)
 			}
 		})

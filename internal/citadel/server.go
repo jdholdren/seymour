@@ -24,7 +24,7 @@ type (
 		*http.Server
 
 		repo db.Repo
-		agg  agg.Service
+		agg  agg.Server
 
 		ghID     string
 		ghSecret string

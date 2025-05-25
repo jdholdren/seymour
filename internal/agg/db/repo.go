@@ -1,10 +1,11 @@
-package agg
+package db
 
 import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/google/uuid"
@@ -13,8 +14,8 @@ import (
 )
 
 var (
-	errConflict = errors.New("resource already exists")
-	errNotFound = errors.New("resource not found")
+	ErrConflict = errors.New("resource already exists")
+	ErrNotFound = errors.New("resource not found")
 )
 
 const (
@@ -34,12 +35,42 @@ func NewRepo(dbx *sqlx.DB) Repo {
 	}
 }
 
+type (
+	// Feed represents an RSS feed's details.
+	Feed struct {
+		ID           string     `db:"id"`
+		Title        string     `db:"title"`
+		URL          string     `db:"url"`
+		Description  string     `db:"description"`
+		LastSyncedAt *time.Time `db:"last_synced_at"`
+		CreatedAt    time.Time  `db:"created_at"`
+		UpdatedAt    time.Time  `db:"updated_at"`
+	}
+
+	// Entry represents a unique entry in an RSS feed.
+	Entry struct {
+		ID          string    `db:"id"`
+		FeedID      string    `db:"feed_id"`
+		GUID        string    `db:"guid"`
+		Title       string    `db:"title"`
+		Description string    `db:"description"`
+		CreatedAt   time.Time `db:"created_at"`
+	}
+
+	// Holds the optional feeds for updating a feed.
+	UpdateFeedArgs struct {
+		Title       string
+		Description string
+		LastSynced  time.Time
+	}
+)
+
 func (r Repo) Feed(ctx context.Context, id string) (Feed, error) {
 	const q = `SELECT * FROM feeds WHERE id = ?;`
 	var feed Feed
 	err := r.db.GetContext(ctx, &feed, q, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Feed{}, errNotFound
+		return Feed{}, ErrNotFound
 	}
 	if err != nil {
 		return Feed{}, fmt.Errorf("error fetching feed: %s", err)
@@ -57,7 +88,7 @@ func (r Repo) InsertFeed(ctx context.Context, url string) (Feed, error) {
 	}
 	_, err := r.db.NamedExecContext(ctx, q, f)
 	if sqliteErr := (&sqlite.Error{}); errors.As(err, &sqliteErr) && sqliteErr.Code() == 2067 {
-		return Feed{}, fmt.Errorf("feed already exists: %w", errConflict)
+		return Feed{}, fmt.Errorf("feed already exists: %w", ErrConflict)
 	}
 	if err != nil {
 		return Feed{}, fmt.Errorf("error inserting feed: %s", err)
@@ -84,7 +115,7 @@ func (r Repo) Entry(ctx context.Context, id string) (Entry, error) {
 	var entry Entry
 	err := r.db.GetContext(ctx, &entry, q, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Entry{}, errNotFound
+		return Entry{}, ErrNotFound
 	}
 	if err != nil {
 		return Entry{}, fmt.Errorf("error fetching entry: %s", err)

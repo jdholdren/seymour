@@ -8,8 +8,26 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jdholdren/seymour/internal/agg/db"
 	"github.com/microcosm-cc/bluemonday"
 )
+
+type activities struct {
+	repo db.Repo
+}
+
+// Instance to make the workflow a bit more readable
+var acts = activities{}
+
+// Fetches all RSS feeds we know about in the system.
+func (a activities) AllFeeds(ctx context.Context) ([]db.Feed, error) {
+	feeds, err := a.repo.AllFeeds(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return feeds, nil
+}
 
 // Represents a response from an RSS feed fetch.
 type rssFeedResp struct {
@@ -32,8 +50,8 @@ var syncClient = &http.Client{
 }
 
 // Goes to the url and grabs the RSS feed items.
-func (s Service) SyncFeed(ctx context.Context, feedID string) error {
-	feed, err := s.repo.Feed(ctx, feedID)
+func (a activities) SyncFeed(ctx context.Context, feedID string) error {
+	feed, err := a.repo.Feed(ctx, feedID)
 	if err != nil {
 		return fmt.Errorf("error fetching feed to sync: %w", err)
 	}
@@ -53,10 +71,10 @@ func (s Service) SyncFeed(ctx context.Context, feedID string) error {
 		return fmt.Errorf("error decoding feed: %s", err)
 	}
 
-	entries := []Entry{}
+	entries := []db.Entry{}
 	for _, channel := range feedResp.Channel {
 		for _, item := range channel.Items {
-			entries = append(entries, Entry{
+			entries = append(entries, db.Entry{
 				FeedID:      feedID,
 				GUID:        item.GUID,
 				Title:       sanitize(item.Title),
@@ -66,10 +84,10 @@ func (s Service) SyncFeed(ctx context.Context, feedID string) error {
 	}
 
 	// Persist the new stuff
-	if err := s.repo.InsertEntries(ctx, entries); err != nil {
+	if err := a.repo.InsertEntries(ctx, entries); err != nil {
 		return fmt.Errorf("error inserting entries: %s", err)
 	}
-	if err := s.repo.UpdateFeed(ctx, feedID, UpdateFeedArgs{
+	if err := a.repo.UpdateFeed(ctx, feedID, db.UpdateFeedArgs{
 		Title:       feedResp.Channel[0].Title,
 		Description: feedResp.Channel[0].Title,
 		LastSynced:  time.Now(),

@@ -1,10 +1,20 @@
 services:
+  agg:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        MAIN_PATH: ./cmd/agg/worker
+    environment:
+      - DATABASE=/data/citadel.sqlite
+    volumes:
+      - ./data/agg_worker:/data
   citadel:
     build:
       context: .
       dockerfile: ./Dockerfile
       args:
-        MAIN_PATH: ./cmd/citadel
+        MAIN_PATH: ./cmd/citadel/api
     ports:
       - "4444:4444"
     environment:
@@ -18,14 +28,12 @@ services:
       - DEBUG_ENDPOINTS=true
     volumes:
       - ./data/citadel:/data
-
-  # temporal:
-  # image: temporalio/auto-setup:1.21
-  # ports:
-  # - "7233:7233"
-  # environment:
-  # - TEMPORAL_PERSISTENCE_DRIVER=sqlite
-  # - TEMPORAL_PERSISTENCE_DATASOURCE=/etc/temporal/persistence/temporal.db
-  # volumes:
-  # - ./data/temporal:/etc/temporal/persistence
-  # restart: unless-stopped
+  temporal:
+    build:
+      dockerfile: ./temporalite/Dockerfile
+    ports:
+      - "8233:8233"
+      - "7233:7233"
+    volumes:
+      - ./data/temporal:/data
+    restart: unless-stopped
