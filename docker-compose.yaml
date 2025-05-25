@@ -1,0 +1,28 @@
+services:
+  citadel:
+    build:
+      context: .
+      dockerfile: ./cmd/citadel/Dockerfile
+    ports:
+      - "4444:4444"
+    environment:
+      - DATABASE=/data/seymour.db
+      - PORT=4444
+      - HTTPS_COOKIES=false
+      - GITHUB_CLIENT_ID=something
+      - GITHUB_CLIENT_SECRET=something
+      - COOKIE_HASH_KEY=soemthing
+      - COOKIE_BLOCK_KEY=something
+    volumes:
+      - ./data/citadel:/data
+
+  # temporal:
+  # image: temporalio/auto-setup:1.21
+  # ports:
+  # - "7233:7233"
+  # environment:
+  # - TEMPORAL_PERSISTENCE_DRIVER=sqlite
+  # - TEMPORAL_PERSISTENCE_DATASOURCE=/etc/temporal/persistence/temporal.db
+  # volumes:
+  # - ./data/temporal:/etc/temporal/persistence
+  # restart: unless-stopped

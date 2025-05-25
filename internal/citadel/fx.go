@@ -7,5 +7,6 @@ import (
 var Module = fx.Module("citadel",
 	fx.Provide(
 		NewServer,
+		NewUserRepo,
 	),
 )

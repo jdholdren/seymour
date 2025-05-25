@@ -1,11 +1,7 @@
 .PHONY: start yac
 
-# Runs the server binary
-start:
-	go run .
+up:
+	docker compose up
 
-start-temporal:
-	temporal server start-dev --db-filename temporal.db
-
-yac:
-	httpyac ./yac/local.http -i
+build-and-restart:
+	docker compose build && docker compose restart

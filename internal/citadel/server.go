@@ -34,7 +34,7 @@ type (
 		httpsCookies bool // Whether or not HTTPS should be used for cookies
 	}
 
-	Config struct {
+	ServerConfig struct {
 		Port               int
 		CookieHashKey      []byte
 		CookieBlockKey     []byte
@@ -46,9 +46,8 @@ type (
 	Params struct {
 		fx.In
 
-		Config Config
+		Config ServerConfig
 		DB     *sqlx.DB
-		Agg    agg.Service
 	}
 )
 
@@ -61,17 +60,14 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 		ghID:         p.Config.GithubClientID,
 		ghSecret:     p.Config.GithubClientSecret,
 		userRepo:     userRepo{db: p.DB},
-		agg:          p.Agg,
 	}
 
 	r.Handle("GET /api/viewer", server.HandlerFuncE(srvr.handleViewer))
 	r.Handle("GET /api/sso-login", server.HandlerFuncE(srvr.handleSSORedirect))
 	r.Handle("GET /api/sso-callback", server.HandlerFuncE(srvr.handleSSOCallback))
 
-	// TODO: Require a session
 	authed := http.NewServeMux()
 	authed.Handle("POST /api/subscriptions", server.HandlerFuncE(srvr.handleCreateSubscription))
-	r.Handle("/", requireSessionMiddleware{inner: authed, secureCookie: srvr.secureCookie})
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {

@@ -2,16 +2,29 @@ package citadel
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
+
+func NewUserRepo(db *sqlx.DB) userRepo {
+	return userRepo{db: db}
+}
 
 type userRepo struct {
 	db *sqlx.DB
 }
 
 const userNamespace = "-usr"
+
+type user struct {
+	ID        string    `db:"id"`
+	GithubID  string    `db:"github_id"`
+	Email     string    `db:"email"`
+	CreatedAt time.Time `db:"created_at"`
+	UpdatedAt time.Time `db:"updated_at"`
+}
 
 func (ur userRepo) ensureUser(ctx context.Context, usr user) (user, error) {
 	const q = `INSERT INTO users (id, email, github_id)
