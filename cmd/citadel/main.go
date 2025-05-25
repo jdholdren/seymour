@@ -14,8 +14,8 @@ import (
 
 	"github.com/jdholdren/seymour/internal/citadel"
 	"github.com/jdholdren/seymour/internal/citadel/migrations"
-	"github.com/jdholdren/seymour/internal/database"
 	"github.com/jdholdren/seymour/internal/logger"
+	"github.com/jdholdren/seymour/internal/migrator"
 )
 
 type config struct {
@@ -51,7 +51,7 @@ func main() {
 	defer dbx.Close()
 
 	// Run all migrations
-	if err := database.RunMigrations(dbx, migrations.Migrations, "."); err != nil {
+	if err := migrator.RunMigrations(dbx, migrations.Migrations, "."); err != nil {
 		log.Fatalf("error running migrations: %s", err)
 	}
 

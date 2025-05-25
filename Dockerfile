@@ -27,8 +27,6 @@ WORKDIR /app
 # Copy binary from builder stage
 COPY --from=builder /app/server .
 
-RUN ls
-
 # Expose port
 EXPOSE 4444
 

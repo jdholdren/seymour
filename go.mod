@@ -4,15 +4,13 @@ go 1.23.0
 
 toolchain go1.23.8
 
-require (
-	github.com/mattn/go-sqlite3 v1.14.22
-	github.com/sethvargo/go-envconfig v1.1.1
-)
+require github.com/sethvargo/go-envconfig v1.1.1
 
 require (
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/golang-migrate/migrate/v4 v4.18.2
 	github.com/google/uuid v1.6.0
+	github.com/gorilla/mux v1.7.4
 	github.com/gorilla/securecookie v1.1.2
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/microcosm-cc/bluemonday v1.0.27

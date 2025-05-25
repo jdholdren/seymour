@@ -6,5 +6,5 @@ up:
 build:
 	docker compose build
 
-build-and-restart:
-	docker compose build && docker compose restart
+rb-citadel:
+	docker compose build citadel && docker compose up -d --force-recreate citadel
