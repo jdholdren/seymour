@@ -11,57 +11,76 @@ import (
 
 	"github.com/microcosm-cc/bluemonday"
 
-	"github.com/jdholdren/seymour/internal/agg/db"
-	"github.com/jdholdren/seymour/internal/agg/model"
 	seyerrs "github.com/jdholdren/seymour/internal/errors"
 )
 
 type (
 	// Aggregator provides the functionality for syncing feeds and aggregating their entries.
 	Aggregator struct {
-		repo db.Repo
+		repo Repo
+	}
+
+	// Feed represents an RSS feed's details.
+	Feed struct {
+		ID           string     `db:"id"`
+		Title        *string    `db:"title"`
+		URL          string     `db:"url"`
+		Description  *string    `db:"description"`
+		LastSyncedAt *time.Time `db:"last_synced_at"`
+		CreatedAt    time.Time  `db:"created_at"`
+		UpdatedAt    time.Time  `db:"updated_at"`
+	}
+
+	// Entry represents a unique entry in an RSS feed.
+	Entry struct {
+		ID          string    `db:"id"`
+		FeedID      string    `db:"feed_id"`
+		GUID        string    `db:"guid"`
+		Title       string    `db:"title"`
+		Description string    `db:"description"`
+		CreatedAt   time.Time `db:"created_at"`
 	}
 )
 
-func NewAggregator(repo db.Repo) Aggregator {
+func NewAggregator(repo Repo) Aggregator {
 	return Aggregator{
 		repo: repo,
 	}
 }
 
-func (a Aggregator) Feed(ctx context.Context, feedID string) (model.Feed, error) {
-	feed, err := a.repo.Feed(ctx, feedID)
-	if errors.Is(err, db.ErrNotFound) {
-		return model.Feed{}, seyerrs.E(err, http.StatusNotFound)
+func (a Aggregator) Feed(ctx context.Context, feedID string) (Feed, error) {
+	feed, err := a.repo.feed(ctx, feedID)
+	if errors.Is(err, ErrNotFound) {
+		return Feed{}, seyerrs.E(err, http.StatusNotFound)
 	}
 	if err != nil {
-		return model.Feed{}, seyerrs.E(err)
+		return Feed{}, seyerrs.E(err)
 	}
 
 	return feed, nil
 }
 
-func (a Aggregator) InsertFeed(ctx context.Context, feedURL string) (model.Feed, error) {
+func (a Aggregator) InsertFeed(ctx context.Context, feedURL string) (Feed, error) {
 	// TODO: URL validation
 
-	feed, err := a.repo.InsertFeed(ctx, feedURL)
+	feed, err := a.repo.insertFeed(ctx, feedURL)
 	if err != nil {
-		return model.Feed{}, seyerrs.E(err)
+		return Feed{}, seyerrs.E(err)
 	}
 
 	return feed, nil
 }
 
 func (a Aggregator) RemoveFeed(ctx context.Context, feedID string) error {
-	if err := a.repo.DeleteFeed(ctx, feedID); err != nil {
+	if err := a.repo.deleteFeed(ctx, feedID); err != nil {
 		return seyerrs.E(err)
 	}
 
 	return nil
 }
 
-func (a Aggregator) AllFeeds(ctx context.Context) ([]model.Feed, error) {
-	feeds, err := a.repo.AllFeeds(ctx)
+func (a Aggregator) AllFeeds(ctx context.Context) ([]Feed, error) {
+	feeds, err := a.repo.allFeeds(ctx)
 	if err != nil {
 		return nil, seyerrs.E(err)
 	}
@@ -90,7 +109,7 @@ var syncClient = &http.Client{
 }
 
 func (a Aggregator) SyncFeed(ctx context.Context, feedID string) error {
-	feed, err := a.repo.Feed(ctx, feedID)
+	feed, err := a.repo.feed(ctx, feedID)
 	if err != nil {
 		return fmt.Errorf("error fetching feed to sync: %w", err)
 	}
@@ -110,10 +129,10 @@ func (a Aggregator) SyncFeed(ctx context.Context, feedID string) error {
 		return fmt.Errorf("error decoding feed: %s", err)
 	}
 
-	entries := []model.Entry{}
+	entries := []Entry{}
 	for _, channel := range feedResp.Channel {
 		for _, item := range channel.Items {
-			entries = append(entries, model.Entry{
+			entries = append(entries, Entry{
 				FeedID:      feedID,
 				GUID:        item.GUID,
 				Title:       sanitize(item.Title),
@@ -123,10 +142,10 @@ func (a Aggregator) SyncFeed(ctx context.Context, feedID string) error {
 	}
 
 	// Persist the new stuff
-	if err := a.repo.InsertEntries(ctx, entries); err != nil {
+	if err := a.repo.insertEntries(ctx, entries); err != nil {
 		return fmt.Errorf("error inserting entries: %s", err)
 	}
-	if err := a.repo.UpdateFeed(ctx, feedID, db.UpdateFeedArgs{
+	if err := a.repo.updateFeed(ctx, feedID, UpdateFeedArgs{
 		Title:       feedResp.Channel[0].Title,
 		Description: feedResp.Channel[0].Title,
 		LastSynced:  time.Now(),

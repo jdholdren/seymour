@@ -6,7 +6,6 @@ import (
 	"log/slog"
 
 	"github.com/jdholdren/seymour/internal/agg"
-	aggmodel "github.com/jdholdren/seymour/internal/agg/model"
 )
 
 type activities struct {
@@ -17,7 +16,7 @@ type activities struct {
 var acts = activities{}
 
 // Fetches all RSS feeds we know about in the system.
-func (a activities) AllFeeds(ctx context.Context) ([]aggmodel.Feed, error) {
+func (a activities) AllFeeds(ctx context.Context) ([]agg.Feed, error) {
 	feeds, err := a.agg.AllFeeds(ctx)
 	if err != nil {
 		return nil, err

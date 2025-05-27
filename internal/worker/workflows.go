@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	aggmodel "github.com/jdholdren/seymour/internal/agg/model"
+	"github.com/jdholdren/seymour/internal/agg"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
@@ -40,7 +40,7 @@ func (workflows) SyncAll(ctx workflow.Context) error {
 	ctx = workflow.WithActivityOptions(ctx, options)
 	a := activities{}
 
-	var feeds []aggmodel.Feed
+	var feeds []agg.Feed
 	if err := workflow.ExecuteActivity(ctx, acts.AllFeeds).Get(ctx, &feeds); err != nil {
 		slog.Error("failed to sync all feeds", "error", err)
 		return err

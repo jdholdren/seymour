@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	aggmodel "github.com/jdholdren/seymour/internal/agg/model"
+	"github.com/jdholdren/seymour/internal/agg"
 	seyerrs "github.com/jdholdren/seymour/internal/errors"
 	"github.com/jdholdren/seymour/internal/server"
 	"github.com/jdholdren/seymour/internal/worker"
@@ -25,7 +25,7 @@ type FeedResp struct {
 	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
-func apiFeed(f aggmodel.Feed) FeedResp {
+func apiFeed(f agg.Feed) FeedResp {
 	var (
 		title string
 		desc  string
