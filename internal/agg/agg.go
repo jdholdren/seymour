@@ -65,10 +65,25 @@ func (a Aggregator) Feed(ctx context.Context, feedID string) (Feed, error) {
 	return feed, nil
 }
 
+func (a Aggregator) FeedByURL(ctx context.Context, feedURL string) (Feed, error) {
+	feed, err := a.repo.feedByURL(ctx, feedURL)
+	if errors.Is(err, ErrNotFound) {
+		return Feed{}, seyerrs.E(err, http.StatusNotFound)
+	}
+	if err != nil {
+		return Feed{}, seyerrs.E(err)
+	}
+
+	return feed, nil
+}
+
 func (a Aggregator) InsertFeed(ctx context.Context, feedURL string) (Feed, error) {
 	// TODO: URL validation
 
 	feed, err := a.repo.insertFeed(ctx, feedURL)
+	if errors.Is(err, ErrConflict) {
+		return Feed{}, seyerrs.E(err, http.StatusConflict)
+	}
 	if err != nil {
 		return Feed{}, seyerrs.E(err)
 	}

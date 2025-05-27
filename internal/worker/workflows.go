@@ -108,6 +108,17 @@ func (workflows) CreateFeed(ctx workflow.Context, feedURL string) (string, error
 		return "", err
 	}
 
+	// Make sure the feed hasn't already been synced
+	var feed agg.Feed
+	if err := workflow.ExecuteActivity(ctx, acts.Feed, feedID).Get(ctx, &feed); err != nil {
+		slog.Error("failed to fetch feed", "error", err)
+		return "", err
+	}
+	if feed.LastSyncedAt != nil { // Exit early
+		slog.Info("feed already synced", "feed_id", feedID)
+		return feedID, nil
+	}
+
 	// Sync the feed
 	err := workflow.ExecuteActivity(ctx, acts.SyncFeed, feedID).Get(ctx, nil)
 	if err != nil {

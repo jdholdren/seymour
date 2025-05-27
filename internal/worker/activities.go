@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 
 	"github.com/jdholdren/seymour/internal/agg"
 	seyerrs "github.com/jdholdren/seymour/internal/errors"
@@ -28,6 +29,16 @@ func (a activities) AllFeeds(ctx context.Context) ([]agg.Feed, error) {
 	return feeds, nil
 }
 
+// Fetches a single feed
+func (a activities) Feed(ctx context.Context, feedID string) (agg.Feed, error) {
+	feed, err := a.agg.Feed(ctx, feedID)
+	if err != nil {
+		return agg.Feed{}, err
+	}
+
+	return feed, nil
+}
+
 // Goes to the url and grabs the RSS feed items.
 func (a activities) SyncFeed(ctx context.Context, feedID string) error {
 	return a.agg.SyncFeed(ctx, feedID)
@@ -48,6 +59,16 @@ func appErr(err error) error {
 
 func (a activities) CreateFeed(ctx context.Context, feedURL string) (string, error) {
 	feed, err := a.agg.InsertFeed(ctx, feedURL)
+	seyErr := &seyerrs.Error{}
+	if errors.As(err, &seyErr) && seyErr.Status == http.StatusConflict {
+		// Fetch the feed from the database
+		feed, err = a.agg.FeedByURL(ctx, feedURL)
+		if err != nil {
+			return "", fmt.Errorf("error fetching conflicting feed: %s", err)
+		}
+
+		return feed.ID, nil
+	}
 	if err != nil {
 		return "", fmt.Errorf("error inserting feed: %w", appErr(err))
 	}

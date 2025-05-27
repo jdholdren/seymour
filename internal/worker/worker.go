@@ -30,6 +30,7 @@ func RunWorker(ctx context.Context, aggregator agg.Aggregator, cli client.Client
 	w.RegisterActivity(a.AllFeeds)
 	w.RegisterActivity(a.RemoveFeed)
 	w.RegisterActivity(a.CreateFeed)
+	w.RegisterActivity(a.Feed)
 
 	// Schedules
 	cli.ScheduleClient().Create(ctx, client.ScheduleOptions{
