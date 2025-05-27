@@ -6,10 +6,12 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/jdholdren/seymour/internal/agg"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
+
+	"github.com/jdholdren/seymour/internal/agg"
+	seyerrs "github.com/jdholdren/seymour/internal/errors"
 )
 
 type workflows struct{}
@@ -73,7 +75,12 @@ func TriggerCreateFeedWorkflow(ctx context.Context, c client.Client, feedURL str
 	}
 
 	var feedID string
-	if err := we.Get(context.Background(), &feedID); err != nil {
+	err = we.Get(context.Background(), &feedID)
+	seyErr := &seyerrs.Error{}
+	if asSeyerr(err, &seyErr) {
+		return "", seyErr
+	}
+	if err != nil {
 		return "", fmt.Errorf("error executing workflow: %s", err)
 	}
 

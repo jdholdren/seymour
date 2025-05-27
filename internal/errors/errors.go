@@ -23,14 +23,30 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("%d: %s, details: %v", e.Status, e.Err, e.Details)
 }
 
+type transport struct {
+	Message string   `json:"message"`
+	Details []Detail `json:"details"`
+	Status  int      `json:"status"`
+}
+
 func (s *Error) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Message string   `json:"message"`
-		Details []Detail `json:"details"`
-	}{
+	return json.Marshal(transport{
 		Message: s.Err.Error(),
 		Details: s.Details,
+		Status:  s.Status,
 	})
+}
+
+func (s *Error) UnmarshalJSON(byts []byte) error {
+	t := transport{}
+	if err := json.Unmarshal(byts, &t); err != nil {
+		return err
+	}
+
+	s.Err = errors.New(t.Message)
+	s.Details = t.Details
+	s.Status = t.Status
+	return nil
 }
 
 func E(args ...any) *Error {

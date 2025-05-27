@@ -2,10 +2,13 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
 	"github.com/jdholdren/seymour/internal/agg"
+	seyerrs "github.com/jdholdren/seymour/internal/errors"
+	"go.temporal.io/sdk/temporal"
 )
 
 type activities struct {
@@ -30,10 +33,23 @@ func (a activities) SyncFeed(ctx context.Context, feedID string) error {
 	return a.agg.SyncFeed(ctx, feedID)
 }
 
+func appErr(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	seyerr := &seyerrs.Error{}
+	if errors.As(err, &seyerr) {
+		return temporal.NewApplicationError(seyerr.Error(), "seyerr", seyerr)
+	}
+
+	return err
+}
+
 func (a activities) CreateFeed(ctx context.Context, feedURL string) (string, error) {
 	feed, err := a.agg.InsertFeed(ctx, feedURL)
 	if err != nil {
-		return "", fmt.Errorf("error inserting feed: %w", err)
+		return "", fmt.Errorf("error inserting feed: %w", appErr(err))
 	}
 
 	slog.Debug("inserted feed", "feedID", feed.ID)

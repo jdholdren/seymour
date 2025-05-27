@@ -13,11 +13,6 @@ import (
 	"modernc.org/sqlite"
 )
 
-var (
-	ErrConflict = errors.New("resource already exists")
-	ErrNotFound = errors.New("resource not found")
-)
-
 const (
 	feedNamespace  = "-fd"
 	entryNamespace = "-ntry"

@@ -42,6 +42,11 @@ type (
 	}
 )
 
+var (
+	ErrConflict = errors.New("resource already exists")
+	ErrNotFound = errors.New("resource not found")
+)
+
 func NewAggregator(repo Repo) Aggregator {
 	return Aggregator{
 		repo: repo,
