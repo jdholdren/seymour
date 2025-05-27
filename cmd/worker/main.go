@@ -13,9 +13,9 @@ import (
 	_ "golang.org/x/crypto/x509roots/fallback"
 	_ "modernc.org/sqlite"
 
-	"github.com/jdholdren/seymour/internal/agg"
 	"github.com/jdholdren/seymour/internal/agg/db"
 	"github.com/jdholdren/seymour/internal/logger"
+	"github.com/jdholdren/seymour/internal/worker"
 )
 
 type config struct {
@@ -51,5 +51,5 @@ func main() {
 	}
 
 	// Run the worker
-	agg.RunWorker(ctx, db.NewRepo(dbx), c)
+	worker.RunWorker(ctx, db.NewRepo(dbx), c)
 }

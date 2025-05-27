@@ -1,4 +1,4 @@
-package agg
+package worker
 
 import (
 	"context"
@@ -81,7 +81,9 @@ func (w workflows) TriggerCreateFeedWorkflow(ctx context.Context, c client.Clien
 }
 
 // CreateFeed inserts a new feed, tries to sync, and rolls back if it's unable to.
-func (workflows) CreateFeed(ctx workflow.Context, feedURL string) error {
+//
+// Returns the ID of the created feed.
+func (workflows) CreateFeed(ctx workflow.Context, feedURL string) (string, error) {
 	options := workflow.ActivityOptions{
 		StartToCloseTimeout: 3 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -96,7 +98,7 @@ func (workflows) CreateFeed(ctx workflow.Context, feedURL string) error {
 	var feedID string
 	if err := workflow.ExecuteActivity(ctx, acts.CreateFeed, feedURL).Get(ctx, &feedID); err != nil {
 		slog.Error("failed to create feed", "error", err)
-		return err
+		return "", err
 	}
 
 	// Sync the feed
@@ -107,11 +109,11 @@ func (workflows) CreateFeed(ctx workflow.Context, feedURL string) error {
 
 		if err := workflow.ExecuteActivity(ctx, acts.RemoveFeed, feedID).Get(ctx, nil); err != nil {
 			slog.Error("failed to remove feed", "feed_id", feedID, "error", err)
-			return err
+			return "", err
 		}
 
-		return err
+		return "", err
 	}
 
-	return nil
+	return feedID, nil
 }

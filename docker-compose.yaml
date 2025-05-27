@@ -1,39 +1,23 @@
 services:
-  agg_server:
+  worker:
     build:
       context: .
       dockerfile: ./Dockerfile
       args:
-        MAIN_PATH: ./cmd/agg/api
-    ports:
-      - "4445:4444"
+        MAIN_PATH: ./cmd/worker
     environment:
-      - DATABASE=/data/agg.sqlite
-      - PORT=4444
+      - DATABASE=/data/citadel.sqlite
       - TEMPORAL_HOST_PORT=host.docker.internal:7233
     volumes:
       - ./data/agg:/data
     depends_on:
       - temporal
-  agg_worker:
+  api:
     build:
       context: .
       dockerfile: ./Dockerfile
       args:
-        MAIN_PATH: ./cmd/agg/worker
-    environment:
-      - DATABASE=/data/agg.sqlite
-      - TEMPORAL_HOST_PORT=host.docker.internal:7233
-    volumes:
-      - ./data/agg:/data
-    depends_on:
-      - temporal
-  citadel:
-    build:
-      context: .
-      dockerfile: ./Dockerfile
-      args:
-        MAIN_PATH: ./cmd/citadel/api
+        MAIN_PATH: ./cmd/api
     ports:
       - "4444:4444"
     environment:
@@ -47,6 +31,8 @@ services:
       - DEBUG_ENDPOINTS=true
     volumes:
       - ./data/citadel:/data
+    depends_on:
+      - temporal
   temporal:
     build:
       dockerfile: ./temporalite/Dockerfile
@@ -55,4 +41,9 @@ services:
       - "7233:7233"
     volumes:
       - ./data/temporal:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8233"] # Await the UI, not pretty but it works
+      interval: 2s
+      timeout: 1s
+      retries: 3
     restart: unless-stopped

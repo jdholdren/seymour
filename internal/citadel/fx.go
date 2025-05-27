@@ -1,6 +1,7 @@
 // Package citadel provides the BFF server for the client side application.
 //
-// It also handles common functions like user signup and auth in its own state.
+// It's the main, monolithic package that handles most of all of the wiring for the whole app.
+// It will use the other packages to provide users with functionality.
 package citadel
 
 import (

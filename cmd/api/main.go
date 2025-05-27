@@ -2,20 +2,24 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"io/fs"
 	"log"
 	"log/slog"
 	"os"
 	"os/signal"
 
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/sqlite"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jmoiron/sqlx"
 	"github.com/sethvargo/go-envconfig"
 	"go.uber.org/fx"
 	_ "modernc.org/sqlite"
 
 	"github.com/jdholdren/seymour/internal/citadel"
-	"github.com/jdholdren/seymour/internal/citadel/migrations"
 	"github.com/jdholdren/seymour/internal/logger"
-	"github.com/jdholdren/seymour/internal/migrator"
+	"github.com/jdholdren/seymour/internal/migrations"
 )
 
 type config struct {
@@ -51,7 +55,7 @@ func main() {
 	defer dbx.Close()
 
 	// Run all migrations
-	if err := migrator.RunMigrations(dbx, migrations.Migrations, "."); err != nil {
+	if err := runMigrations(dbx, migrations.Migrations, "."); err != nil {
 		log.Fatalf("error running migrations: %s", err)
 	}
 
@@ -73,4 +77,26 @@ func main() {
 		citadel.Module,
 		fx.Invoke(func(citadel.Server) {}), // Start the BFF server
 	).Run()
+}
+
+// Performs all migrations in the given filesystem.
+func runMigrations(dbx *sqlx.DB, fs fs.FS, dirName string) error {
+	d, err := iofs.New(fs, dirName)
+	if err != nil {
+		return fmt.Errorf("error creating migrations source: %s", err)
+	}
+	i, err := sqlite.WithInstance(dbx.DB, &sqlite.Config{})
+	if err != nil {
+		return fmt.Errorf("error creating sqlite instance for migration: %s", err)
+	}
+	migrator, err := migrate.NewWithInstance("iofs", d, "sqlite3", i)
+	if err != nil {
+		return fmt.Errorf("error creating migrator: %s", err)
+	}
+	if err := migrator.Up(); err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("error migrating: %s", err)
+	}
+	slog.Info("migrated")
+
+	return nil
 }

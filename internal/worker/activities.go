@@ -1,4 +1,4 @@
-package agg
+package worker
 
 import (
 	"context"

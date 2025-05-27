@@ -1,4 +1,4 @@
-package agg
+package worker
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"go.temporal.io/sdk/worker"
 )
 
-const TaskQueue = "aggregator"
+const TaskQueue = "shared"
 
 // RunWorker runs a Workflow and Activity worker for the Billing system.
 func RunWorker(ctx context.Context, repo db.Repo, cli client.Client) error {

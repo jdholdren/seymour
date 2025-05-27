@@ -17,16 +17,13 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -o server $MAIN_PATH
 FROM alpine as certs
 RUN apk add -U --no-cache ca-certificates
 
-FROM alpine
+FROM scratch
 
 WORKDIR /app
 
 # Copy binary from builder stage
 COPY --from=builder /app/server .
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-
-RUN apk add --update \
-    curl
 
 # Expose port
 EXPOSE 4444

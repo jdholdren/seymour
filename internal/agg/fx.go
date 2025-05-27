@@ -7,7 +7,6 @@ import (
 
 var Module = fx.Module("agg",
 	fx.Provide(
-		NewServer,
 		db.NewRepo,
 	),
 )
