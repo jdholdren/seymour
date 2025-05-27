@@ -10,6 +10,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/sethvargo/go-envconfig"
 	"go.temporal.io/sdk/client"
+	_ "golang.org/x/crypto/x509roots/fallback"
 	_ "modernc.org/sqlite"
 
 	"github.com/jdholdren/seymour/internal/agg"

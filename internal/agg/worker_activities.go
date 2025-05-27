@@ -3,7 +3,9 @@ package agg
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -111,4 +113,31 @@ func sanitize(s string) string {
 	}
 
 	return s
+}
+
+func (a activities) CreateFeed(ctx context.Context, feedURL string) (string, error) {
+	feed, err := a.repo.InsertFeed(ctx, feedURL)
+	if errors.Is(err, db.ErrConflict) {
+		feed, err = a.repo.FeedByURL(ctx, feedURL)
+		if err != nil {
+			return "", fmt.Errorf("error fetching conflicting feed: %w", err)
+		}
+
+		return feed.ID, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("error inserting feed: %w", err)
+	}
+
+	slog.Debug("inserted feed", "feedID", feed.ID)
+
+	return feed.ID, nil
+}
+
+func (a activities) RemoveFeed(ctx context.Context, feedID string) error {
+	if err := a.repo.DeleteFeed(ctx, feedID); err != nil {
+		return fmt.Errorf("error deleting feed: %w", err)
+	}
+
+	return nil
 }

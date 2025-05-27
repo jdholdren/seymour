@@ -1,4 +1,20 @@
 services:
+  agg_server:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        MAIN_PATH: ./cmd/agg/api
+    ports:
+      - "4445:4444"
+    environment:
+      - DATABASE=/data/agg.sqlite
+      - PORT=4444
+      - TEMPORAL_HOST_PORT=host.docker.internal:7233
+    volumes:
+      - ./data/agg:/data
+    depends_on:
+      - temporal
   agg_worker:
     build:
       context: .
@@ -6,10 +22,10 @@ services:
       args:
         MAIN_PATH: ./cmd/agg/worker
     environment:
-      - DATABASE=/data/citadel.sqlite
+      - DATABASE=/data/agg.sqlite
       - TEMPORAL_HOST_PORT=host.docker.internal:7233
     volumes:
-      - ./data/agg_worker:/data
+      - ./data/agg:/data
     depends_on:
       - temporal
   citadel:

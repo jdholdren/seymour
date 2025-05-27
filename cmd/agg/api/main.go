@@ -9,25 +9,19 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/sethvargo/go-envconfig"
+	"go.temporal.io/sdk/client"
 	"go.uber.org/fx"
-	_ "modernc.org/sqlite"
 
-	"github.com/jdholdren/seymour/internal/citadel"
-	"github.com/jdholdren/seymour/internal/citadel/migrations"
+	"github.com/jdholdren/seymour/internal/agg"
+	"github.com/jdholdren/seymour/internal/agg/migrations"
 	"github.com/jdholdren/seymour/internal/logger"
 	"github.com/jdholdren/seymour/internal/migrator"
 )
 
 type config struct {
-	Database string `env:"DATABASE, required"`
-
-	Port               int    `env:"PORT, default=4444"`
-	HTTPSCookies       bool   `env:"HTTPS_COOKIES, default=false"`
-	GithubClientID     string `env:"GITHUB_CLIENT_ID"`
-	GithubClientSecret string `env:"GITHUB_CLIENT_SECRET"`
-	CookieHashKey      string `env:"COOKIE_HASH_KEY"`
-	CookieBlockKey     string `env:"COOKIE_BLOCK_KEY"`
-	DebugEndpoints     bool   `env:"DEBUG_ENDPOINTS, default=false"`
+	Database         string `env:"DATABASE, required"`
+	Port             int    `env:"PORT, default=4444"`
+	TemporalHostPort string `env:"TEMPORAL_HOST_PORT, required"`
 }
 
 func main() {
@@ -49,28 +43,31 @@ func main() {
 		log.Fatalf("error opening database: %s", err)
 	}
 	defer dbx.Close()
-
+	//
 	// Run all migrations
 	if err := migrator.RunMigrations(dbx, migrations.Migrations, "."); err != nil {
 		log.Fatalf("error running migrations: %s", err)
 	}
 
+	// Dial temporal
+	c, err := client.Dial(client.Options{
+		HostPort: cfg.TemporalHostPort,
+	})
+	if err != nil {
+		log.Fatalln("error creating Temporal client:", err)
+	}
+
 	// Start the application
 	fx.New(
 		fx.Supply(
-			citadel.ServerConfig{
-				Port:               cfg.Port,
-				GithubClientID:     cfg.GithubClientID,
-				GithubClientSecret: cfg.GithubClientSecret,
-				CookieHashKey:      []byte(cfg.CookieHashKey),
-				CookieBlockKey:     []byte(cfg.CookieBlockKey),
-				HttpsCookies:       cfg.HTTPSCookies,
-				DebugEndpoints:     cfg.DebugEndpoints,
+			agg.ServerConfig{
+				Port: cfg.Port,
 			},
 			dbx,
 			fx.Annotate(ctx, fx.As(new(context.Context))),
+			fx.Annotate(c, fx.As(new(client.Client))),
 		),
-		citadel.Module,
-		fx.Invoke(func(citadel.Server) {}), // Start the BFF server
+		agg.Module,
+		fx.Invoke(func(agg.Server) {}), // Start the agg server
 	).Run()
 }

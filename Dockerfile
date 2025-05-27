@@ -1,12 +1,8 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:alpine AS builder
 
 ARG MAIN_PATH
 
 WORKDIR /app
-
-RUN apk update \
-    && apk add --no-cache ca-certificates \
-    && update-ca-certificates
 
 # Copy go mod and sum files
 COPY go.mod go.sum ./
@@ -18,14 +14,19 @@ COPY . .
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -o server $MAIN_PATH
 
-FROM alpine:latest
+FROM alpine as certs
+RUN apk add -U --no-cache ca-certificates
 
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+FROM alpine
 
 WORKDIR /app
 
 # Copy binary from builder stage
 COPY --from=builder /app/server .
+COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+RUN apk add --update \
+    curl
 
 # Expose port
 EXPOSE 4444

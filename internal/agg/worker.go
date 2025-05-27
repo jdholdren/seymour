@@ -23,10 +23,13 @@ func RunWorker(ctx context.Context, repo db.Repo, cli client.Client) error {
 	wfs := workflows{}
 	w.RegisterWorkflow(wfs.SyncIndividual)
 	w.RegisterWorkflow(wfs.SyncAll)
+	w.RegisterWorkflow(wfs.CreateFeed)
 
 	// Activities
 	w.RegisterActivity(a.SyncFeed)
 	w.RegisterActivity(a.AllFeeds)
+	w.RegisterActivity(a.RemoveFeed)
+	w.RegisterActivity(a.CreateFeed)
 
 	// Schedules
 	cli.ScheduleClient().Create(ctx, client.ScheduleOptions{

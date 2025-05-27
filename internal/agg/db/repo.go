@@ -39,9 +39,9 @@ type (
 	// Feed represents an RSS feed's details.
 	Feed struct {
 		ID           string     `db:"id"`
-		Title        string     `db:"title"`
+		Title        *string    `db:"title"`
 		URL          string     `db:"url"`
-		Description  string     `db:"description"`
+		Description  *string    `db:"description"`
 		LastSyncedAt *time.Time `db:"last_synced_at"`
 		CreatedAt    time.Time  `db:"created_at"`
 		UpdatedAt    time.Time  `db:"updated_at"`
@@ -79,6 +79,21 @@ func (r Repo) Feed(ctx context.Context, id string) (Feed, error) {
 	return feed, nil
 }
 
+func (r Repo) FeedByURL(ctx context.Context, url string) (Feed, error) {
+	const q = `SELECT * FROM feeds WHERE url = ?;`
+
+	var feed Feed
+	err := r.db.GetContext(ctx, &feed, q, url)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Feed{}, ErrNotFound
+	}
+	if err != nil {
+		return Feed{}, fmt.Errorf("error fetching feed: %s", err)
+	}
+
+	return feed, nil
+}
+
 func (r Repo) InsertFeed(ctx context.Context, url string) (Feed, error) {
 	const q = `INSERT INTO feeds (id, url) VALUES (:id, :url);`
 
@@ -95,6 +110,16 @@ func (r Repo) InsertFeed(ctx context.Context, url string) (Feed, error) {
 	}
 
 	return r.Feed(ctx, f.ID)
+}
+
+func (r Repo) DeleteFeed(ctx context.Context, id string) error {
+	const q = `DELETE FROM feeds WHERE id = ?;`
+
+	if _, err := r.db.ExecContext(ctx, q, id); err != nil {
+		return fmt.Errorf("error deleting feed: %s", err)
+	}
+
+	return nil
 }
 
 // AllFeeds retrieves _all_ feeds from the database.

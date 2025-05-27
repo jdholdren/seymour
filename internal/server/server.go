@@ -9,20 +9,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gorilla/mux"
 	seyerrs "github.com/jdholdren/seymour/internal/errors"
-)
-
-type (
-	// Server is the HTTP portion serving the public API.
-	Server struct {
-		http.Server
-	}
-
-	// Config holds all of the different options for making a
-	// server.
-	Config struct {
-		Port int
-	}
 )
 
 func WriteJSON(w http.ResponseWriter, status int, data any) error {
@@ -99,4 +87,28 @@ func (f HandlerFuncE) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, sErr.Status, sErr)
+}
+
+// Server is a good default server with a few convenience methods.
+type Server struct {
+	*http.Server
+
+	R *mux.Router
+}
+
+func NewServer(addr string) Server {
+	r := mux.NewRouter()
+	return Server{
+		Server: &http.Server{
+			WriteTimeout: 5 * time.Second,
+			ReadTimeout:  5 * time.Second,
+			Addr:         addr,
+			Handler:      r,
+		},
+		R: r,
+	}
+}
+
+func (s Server) HandleFuncE(path string, f HandlerFuncE) *mux.Route {
+	return s.R.Handle(path, f)
 }

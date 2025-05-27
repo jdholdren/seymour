@@ -17,6 +17,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	go.temporal.io/sdk v1.34.0
 	go.uber.org/fx v1.23.0
+	golang.org/x/crypto/x509roots/fallback v0.0.0-20250515174705-ebc8e4631531
 	modernc.org/sqlite v1.18.1
 )
 

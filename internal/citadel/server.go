@@ -7,12 +7,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/gorilla/securecookie"
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/fx"
 
-	"github.com/jdholdren/seymour/internal/agg"
 	"github.com/jdholdren/seymour/internal/citadel/db"
 	"github.com/jdholdren/seymour/internal/server"
 )
@@ -21,10 +19,9 @@ type (
 	// Server is an instance of the aggregation server and handles requests
 	// to search feeds or add new ones for ingestion.
 	Server struct {
-		*http.Server
+		server.Server
 
 		repo db.Repo
-		agg  agg.Server
 
 		ghID     string
 		ghSecret string
@@ -53,14 +50,8 @@ type (
 )
 
 func NewServer(lc fx.Lifecycle, p Params) Server {
-	r := mux.NewRouter()
 	srvr := Server{
-		Server: &http.Server{
-			Addr:         fmt.Sprintf(":%d", p.Config.Port),
-			WriteTimeout: 5 * time.Second,
-			ReadTimeout:  5 * time.Second,
-			Handler:      r,
-		},
+		Server:       server.NewServer(fmt.Sprintf(":%d", p.Config.Port)),
 		secureCookie: securecookie.New(p.Config.CookieHashKey, p.Config.CookieBlockKey),
 		httpsCookies: p.Config.HttpsCookies,
 		ghID:         p.Config.GithubClientID,
@@ -68,14 +59,14 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 		repo:         db.NewRepo(p.DB),
 	}
 
-	r.Use(server.AccessLogMiddleware) // Log everything
-	r.Handle("/api/viewer", server.HandlerFuncE(srvr.handleViewer)).Methods(http.MethodGet)
-	r.Handle("/api/sso-login", server.HandlerFuncE(srvr.handleSSORedirect)).Methods(http.MethodGet)
-	r.Handle("/api/sso-callback", server.HandlerFuncE(srvr.handleSSOCallback)).Methods(http.MethodGet)
+	srvr.Server.R.Use(server.AccessLogMiddleware) // Log everything
+	srvr.Server.HandleFuncE("/api/viewer", srvr.handleViewer).Methods(http.MethodGet)
+	srvr.Server.HandleFuncE("/api/sso-login", srvr.handleSSORedirect).Methods(http.MethodGet)
+	srvr.Server.HandleFuncE("/api/sso-callback", srvr.handleSSOCallback).Methods(http.MethodGet)
 
 	if p.Config.DebugEndpoints {
 		// For local testing
-		r.Handle("/api/login", server.HandlerFuncE(srvr.handleDebugLogin)).Methods(http.MethodPost)
+		srvr.Server.HandleFuncE("/api/login", srvr.handleDebugLogin).Methods(http.MethodPost)
 	}
 
 	lc.Append(fx.Hook{
