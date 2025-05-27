@@ -7,6 +7,7 @@ import (
 
 var Module = fx.Module("agg",
 	fx.Provide(
+		NewAggregator,
 		db.NewRepo,
 	),
 )

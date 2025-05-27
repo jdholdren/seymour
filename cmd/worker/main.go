@@ -10,10 +10,11 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/sethvargo/go-envconfig"
 	"go.temporal.io/sdk/client"
+	"go.uber.org/fx"
 	_ "golang.org/x/crypto/x509roots/fallback"
 	_ "modernc.org/sqlite"
 
-	"github.com/jdholdren/seymour/internal/agg/db"
+	"github.com/jdholdren/seymour/internal/agg"
 	"github.com/jdholdren/seymour/internal/logger"
 	"github.com/jdholdren/seymour/internal/worker"
 )
@@ -50,6 +51,15 @@ func main() {
 		log.Fatalln("Unable to create Temporal client:", err)
 	}
 
-	// Run the worker
-	worker.RunWorker(ctx, db.NewRepo(dbx), c)
+	fx.New(
+		fx.Supply(
+			dbx,
+			fx.Annotate(ctx, fx.As(new(context.Context))),
+			fx.Annotate(c, fx.As(new(client.Client))),
+		),
+		agg.Module,
+		fx.Invoke(func(ctx context.Context, a agg.Aggregator, c client.Client) {
+			worker.RunWorker(ctx, a, c)
+		}), // Start the worker
+	).Run()
 }

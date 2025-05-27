@@ -89,26 +89,11 @@ func (f HandlerFuncE) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, sErr.Status, sErr)
 }
 
-// Server is a good default server with a few convenience methods.
-type Server struct {
-	*http.Server
-
-	R *mux.Router
+// ErrRouter is a newtype around a mux router that allows attaching handlers that return errors.
+type ErrRouter struct {
+	*mux.Router
 }
 
-func NewServer(addr string) Server {
-	r := mux.NewRouter()
-	return Server{
-		Server: &http.Server{
-			WriteTimeout: 5 * time.Second,
-			ReadTimeout:  5 * time.Second,
-			Addr:         addr,
-			Handler:      r,
-		},
-		R: r,
-	}
-}
-
-func (s Server) HandleFuncE(path string, f HandlerFuncE) *mux.Route {
-	return s.R.Handle(path, f)
+func (r ErrRouter) HandleFuncE(path string, f HandlerFuncE) *mux.Route {
+	return r.Handle(path, f)
 }

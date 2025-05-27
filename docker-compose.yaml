@@ -9,7 +9,7 @@ services:
       - DATABASE=/data/citadel.sqlite
       - TEMPORAL_HOST_PORT=host.docker.internal:7233
     volumes:
-      - ./data/agg:/data
+      - ./data/citadel:/data
     depends_on:
       - temporal
   api:
@@ -22,6 +22,7 @@ services:
       - "4444:4444"
     environment:
       - DATABASE=/data/citadel.sqlite
+      - TEMPORAL_HOST_PORT=host.docker.internal:7233
       - PORT=4444
       - HTTPS_COOKIES=false
       - GITHUB_CLIENT_ID=something

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/jdholdren/seymour/internal/agg/db"
+	"github.com/jdholdren/seymour/internal/agg"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 )
@@ -12,9 +12,9 @@ import (
 const TaskQueue = "shared"
 
 // RunWorker runs a Workflow and Activity worker for the Billing system.
-func RunWorker(ctx context.Context, repo db.Repo, cli client.Client) error {
+func RunWorker(ctx context.Context, aggregator agg.Aggregator, cli client.Client) error {
 	a := activities{
-		repo: repo,
+		agg: aggregator,
 	}
 
 	w := worker.New(cli, TaskQueue, worker.Options{})

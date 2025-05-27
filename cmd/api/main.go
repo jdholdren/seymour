@@ -14,16 +14,19 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jmoiron/sqlx"
 	"github.com/sethvargo/go-envconfig"
+	"go.temporal.io/sdk/client"
 	"go.uber.org/fx"
 	_ "modernc.org/sqlite"
 
+	"github.com/jdholdren/seymour/internal/agg"
 	"github.com/jdholdren/seymour/internal/citadel"
 	"github.com/jdholdren/seymour/internal/logger"
 	"github.com/jdholdren/seymour/internal/migrations"
 )
 
 type config struct {
-	Database string `env:"DATABASE, required"`
+	Database         string `env:"DATABASE, required"`
+	TemporalHostPort string `env:"TEMPORAL_HOST_PORT, required"`
 
 	Port               int    `env:"PORT, default=4444"`
 	HTTPSCookies       bool   `env:"HTTPS_COOKIES, default=false"`
@@ -59,6 +62,13 @@ func main() {
 		log.Fatalf("error running migrations: %s", err)
 	}
 
+	c, err := client.Dial(client.Options{
+		HostPort: cfg.TemporalHostPort,
+	})
+	if err != nil {
+		log.Fatalln("Unable to create Temporal client:", err)
+	}
+
 	// Start the application
 	fx.New(
 		fx.Supply(
@@ -73,8 +83,10 @@ func main() {
 			},
 			dbx,
 			fx.Annotate(ctx, fx.As(new(context.Context))),
+			fx.Annotate(c, fx.As(new(client.Client))),
 		),
 		citadel.Module,
+		agg.Module,
 		fx.Invoke(func(citadel.Server) {}), // Start the BFF server
 	).Run()
 }

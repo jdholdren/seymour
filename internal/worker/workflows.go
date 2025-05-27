@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/jdholdren/seymour/internal/agg/db"
+	aggmodel "github.com/jdholdren/seymour/internal/agg/model"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
@@ -40,7 +40,7 @@ func (workflows) SyncAll(ctx workflow.Context) error {
 	ctx = workflow.WithActivityOptions(ctx, options)
 	a := activities{}
 
-	var feeds []db.Feed
+	var feeds []aggmodel.Feed
 	if err := workflow.ExecuteActivity(ctx, acts.AllFeeds).Get(ctx, &feeds); err != nil {
 		slog.Error("failed to sync all feeds", "error", err)
 		return err
@@ -63,11 +63,11 @@ func (workflows) SyncAll(ctx workflow.Context) error {
 	return nil
 }
 
-func (w workflows) TriggerCreateFeedWorkflow(ctx context.Context, c client.Client, feedURL string) (string, error) {
+func TriggerCreateFeedWorkflow(ctx context.Context, c client.Client, feedURL string) (string, error) {
 	options := client.StartWorkflowOptions{
 		TaskQueue: TaskQueue,
 	}
-	we, err := c.ExecuteWorkflow(ctx, options, w.CreateFeed, feedURL)
+	we, err := c.ExecuteWorkflow(ctx, options, workflows{}.CreateFeed, feedURL)
 	if err != nil {
 		return "", fmt.Errorf("unable to execute workflow: %s", err)
 	}

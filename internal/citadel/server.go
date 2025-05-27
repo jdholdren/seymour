@@ -7,10 +7,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/gorilla/securecookie"
 	"github.com/jmoiron/sqlx"
+	"go.temporal.io/sdk/client"
 	"go.uber.org/fx"
 
+	"github.com/jdholdren/seymour/internal/agg"
 	"github.com/jdholdren/seymour/internal/citadel/db"
 	"github.com/jdholdren/seymour/internal/server"
 )
@@ -19,13 +22,14 @@ type (
 	// Server is an instance of the aggregation server and handles requests
 	// to search feeds or add new ones for ingestion.
 	Server struct {
-		server.Server
+		*http.Server
 
-		repo db.Repo
+		repo       db.Repo
+		tempCli    client.Client
+		aggregator agg.Aggregator
 
-		ghID     string
-		ghSecret string
-
+		ghID         string
+		ghSecret     string
 		secureCookie *securecookie.SecureCookie
 		httpsCookies bool // Whether or not HTTPS should be used for cookies
 	}
@@ -44,30 +48,44 @@ type (
 	Params struct {
 		fx.In
 
-		Config ServerConfig
-		DB     *sqlx.DB
+		Config      ServerConfig
+		DB          *sqlx.DB
+		TemporalCli client.Client
+		Aggregator  agg.Aggregator
 	}
 )
 
 func NewServer(lc fx.Lifecycle, p Params) Server {
+	r := server.ErrRouter{Router: mux.NewRouter()}
 	srvr := Server{
-		Server:       server.NewServer(fmt.Sprintf(":%d", p.Config.Port)),
+		Server: &http.Server{
+			Addr:         fmt.Sprintf(":%d", p.Config.Port),
+			ReadTimeout:  5 * time.Second,
+			WriteTimeout: 5 * time.Second,
+			Handler:      r,
+		},
 		secureCookie: securecookie.New(p.Config.CookieHashKey, p.Config.CookieBlockKey),
 		httpsCookies: p.Config.HttpsCookies,
 		ghID:         p.Config.GithubClientID,
 		ghSecret:     p.Config.GithubClientSecret,
 		repo:         db.NewRepo(p.DB),
+		tempCli:      p.TemporalCli,
+		aggregator:   p.Aggregator,
 	}
 
-	srvr.Server.R.Use(server.AccessLogMiddleware) // Log everything
-	srvr.Server.HandleFuncE("/api/viewer", srvr.handleViewer).Methods(http.MethodGet)
-	srvr.Server.HandleFuncE("/api/sso-login", srvr.handleSSORedirect).Methods(http.MethodGet)
-	srvr.Server.HandleFuncE("/api/sso-callback", srvr.handleSSOCallback).Methods(http.MethodGet)
+	r.Use(server.AccessLogMiddleware) // Log everything
+	r.HandleFuncE("/api/viewer", srvr.handleViewer).Methods(http.MethodGet)
+	r.HandleFuncE("/api/sso-login", srvr.handleSSORedirect).Methods(http.MethodGet)
+	r.HandleFuncE("/api/sso-callback", srvr.handleSSOCallback).Methods(http.MethodGet)
 
 	if p.Config.DebugEndpoints {
 		// For local testing
-		srvr.Server.HandleFuncE("/api/login", srvr.handleDebugLogin).Methods(http.MethodPost)
+		r.HandleFuncE("/api/login", srvr.handleDebugLogin).Methods(http.MethodPost)
 	}
+
+	authed := server.ErrRouter{Router: r.NewRoute().Subrouter()}
+	authed.Use(requireSessionMiddleware(srvr.secureCookie))
+	authed.HandleFuncE("/api/subscriptions", srvr.postSusbcription)
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
