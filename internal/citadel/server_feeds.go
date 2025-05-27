@@ -58,13 +58,17 @@ func (s Server) postSusbcription(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	// Start the workflow to create it and verify it
-	_, err := worker.TriggerCreateFeedWorkflow(ctx, s.tempCli, body.FeedURL)
+	feedID, err := worker.TriggerCreateFeedWorkflow(ctx, s.tempCli, body.FeedURL)
 	if err != nil {
 		// TODO: Other errors should be possible here, like a sync going bad due to a bad url
 		return seyerrs.E(err, http.StatusInternalServerError)
 	}
+	feed, err := s.aggregator.Feed(ctx, feedID)
+	if err != nil {
+		return err
+	}
 
 	// TODO: Add the feed to the user's subscriptions
 
-	return server.WriteJSON(w, http.StatusCreated, struct{}{})
+	return server.WriteJSON(w, http.StatusCreated, apiFeed(feed))
 }
