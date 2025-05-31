@@ -8,20 +8,23 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/sqlite"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jmoiron/sqlx"
 	"github.com/sethvargo/go-envconfig"
+	"github.com/sethvargo/go-retry"
 	"go.temporal.io/sdk/client"
 	"go.uber.org/fx"
 	_ "modernc.org/sqlite"
 
-	"github.com/jdholdren/seymour/internal/agg"
 	"github.com/jdholdren/seymour/internal/citadel"
 	"github.com/jdholdren/seymour/internal/logger"
 	"github.com/jdholdren/seymour/internal/migrations"
+	"github.com/jdholdren/seymour/internal/seymour"
+	seyqlite "github.com/jdholdren/seymour/internal/sqlite"
 )
 
 type config struct {
@@ -62,10 +65,21 @@ func main() {
 		log.Fatalf("error running migrations: %s", err)
 	}
 
-	c, err := client.Dial(client.Options{
-		HostPort: cfg.TemporalHostPort,
-	})
-	if err != nil {
+	repo := seyqlite.New(dbx)
+
+	// Retry until temporal is ready
+	var temporalCli client.Client
+	if err := retry.Fibonacci(ctx, 1*time.Second, func(ctx context.Context) error {
+		c, err := client.Dial(client.Options{
+			HostPort: cfg.TemporalHostPort,
+		})
+		if err != nil {
+			return retry.RetryableError(err)
+		}
+		temporalCli = c
+
+		return nil
+	}); err != nil {
 		log.Fatalln("Unable to create Temporal client:", err)
 	}
 
@@ -83,10 +97,11 @@ func main() {
 			},
 			dbx,
 			fx.Annotate(ctx, fx.As(new(context.Context))),
-			fx.Annotate(c, fx.As(new(client.Client))),
+			fx.Annotate(temporalCli, fx.As(new(client.Client))),
+			fx.Annotate(repo, fx.As(new(seymour.FeedRepo))),
+			fx.Annotate(repo, fx.As(new(seymour.TimelineRepo))),
 		),
 		citadel.Module,
-		agg.Module,
 		fx.Invoke(func(citadel.Server) {}), // Start the BFF server
 	).Run()
 }

@@ -9,7 +9,9 @@ services:
       - DATABASE=/data/citadel.sqlite
       - TEMPORAL_HOST_PORT=host.docker.internal:7233
     volumes:
-      - ./data/citadel:/data
+      - type: bind
+        source: ./data/citadel
+        target: /data
     depends_on:
       - temporal
   api:
@@ -20,18 +22,17 @@ services:
         MAIN_PATH: ./cmd/api
     ports:
       - "4444:4444"
+    env_file: .env
     environment:
       - DATABASE=/data/citadel.sqlite
       - TEMPORAL_HOST_PORT=host.docker.internal:7233
       - PORT=4444
       - HTTPS_COOKIES=false
-      - GITHUB_CLIENT_ID=something
-      - GITHUB_CLIENT_SECRET=something
-      - COOKIE_HASH_KEY=aBcDeFgHiJkLmNoP
-      - COOKIE_BLOCK_KEY=aBcDeFgHiJkLmNoP
       - DEBUG_ENDPOINTS=true
     volumes:
-      - ./data/citadel:/data
+      - type: bind
+        source: ./data/citadel
+        target: /data
     depends_on:
       - temporal
   temporal:

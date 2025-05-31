@@ -10,8 +10,8 @@ import (
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 
-	"github.com/jdholdren/seymour/internal/agg"
 	seyerrs "github.com/jdholdren/seymour/internal/errors"
+	"github.com/jdholdren/seymour/internal/seymour"
 )
 
 type workflows struct{}
@@ -42,7 +42,7 @@ func (workflows) SyncAll(ctx workflow.Context) error {
 	ctx = workflow.WithActivityOptions(ctx, options)
 	a := activities{}
 
-	var feeds []agg.Feed
+	var feeds []seymour.Feed
 	if err := workflow.ExecuteActivity(ctx, acts.AllFeeds).Get(ctx, &feeds); err != nil {
 		slog.Error("failed to sync all feeds", "error", err)
 		return err
@@ -109,7 +109,7 @@ func (workflows) CreateFeed(ctx workflow.Context, feedURL string) (string, error
 	}
 
 	// Make sure the feed hasn't already been synced
-	var feed agg.Feed
+	var feed seymour.Feed
 	if err := workflow.ExecuteActivity(ctx, acts.Feed, feedID).Get(ctx, &feed); err != nil {
 		slog.Error("failed to fetch feed", "error", err)
 		return "", err

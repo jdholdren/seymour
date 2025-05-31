@@ -77,16 +77,20 @@ type HandlerFuncE func(w http.ResponseWriter, r *http.Request) error
 func (f HandlerFuncE) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	err := f(w, r)
 	if err == nil {
+		slog.Info("no error coming back")
 		return
 	}
 
 	// Either it's already a structured error, or coerce it to one
 	sErr := &seyerrs.Error{}
 	if !errors.As(err, &sErr) {
+		slog.Info("non seyerr")
 		sErr = seyerrs.E(http.StatusInternalServerError, err)
 	}
 
-	WriteJSON(w, sErr.Status, sErr)
+	if err := WriteJSON(w, sErr.Status, sErr); err != nil {
+		slog.Error("error writing response", "error", err)
+	}
 }
 
 // ErrRouter is a newtype around a mux router that allows attaching handlers that return errors.

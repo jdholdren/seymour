@@ -5,23 +5,22 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
+	"time"
 
-	"github.com/jdholdren/seymour/internal/agg"
-	seyerrs "github.com/jdholdren/seymour/internal/errors"
-	"go.temporal.io/sdk/temporal"
+	"github.com/jdholdren/seymour/internal/seymour"
+	"github.com/jdholdren/seymour/internal/sync"
 )
 
 type activities struct {
-	agg agg.Aggregator
+	feedRepo seymour.FeedRepo
 }
 
 // Instance to make the workflow a bit more readable
 var acts = activities{}
 
 // Fetches all RSS feeds we know about in the system.
-func (a activities) AllFeeds(ctx context.Context) ([]agg.Feed, error) {
-	feeds, err := a.agg.AllFeeds(ctx)
+func (a activities) AllFeeds(ctx context.Context) ([]seymour.Feed, error) {
+	feeds, err := a.feedRepo.AllFeeds(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -30,10 +29,10 @@ func (a activities) AllFeeds(ctx context.Context) ([]agg.Feed, error) {
 }
 
 // Fetches a single feed
-func (a activities) Feed(ctx context.Context, feedID string) (agg.Feed, error) {
-	feed, err := a.agg.Feed(ctx, feedID)
+func (a activities) Feed(ctx context.Context, feedID string) (seymour.Feed, error) {
+	feed, err := a.feedRepo.Feed(ctx, feedID)
 	if err != nil {
-		return agg.Feed{}, err
+		return seymour.Feed{}, err
 	}
 
 	return feed, nil
@@ -41,28 +40,35 @@ func (a activities) Feed(ctx context.Context, feedID string) (agg.Feed, error) {
 
 // Goes to the url and grabs the RSS feed items.
 func (a activities) SyncFeed(ctx context.Context, feedID string) error {
-	return a.agg.SyncFeed(ctx, feedID)
-}
-
-func appErr(err error) error {
-	if err == nil {
-		return nil
+	feed, err := a.feedRepo.Feed(ctx, feedID)
+	if err != nil {
+		return err
 	}
 
-	seyerr := &seyerrs.Error{}
-	if errors.As(err, &seyerr) {
-		return temporal.NewApplicationError(seyerr.Error(), "seyerr", seyerr)
+	feed, entries, err := sync.Feed(ctx, feed.ID, feed.URL)
+	if err != nil {
+		return err
+	}
+
+	if err := a.feedRepo.UpdateFeed(ctx, feed.ID, seymour.UpdateFeedArgs{
+		Title:       *feed.Title,
+		Description: *feed.Title,
+		LastSynced:  time.Now(),
+	}); err != nil {
+		return err
+	}
+	if err := a.feedRepo.InsertEntries(ctx, entries); err != nil {
+		return err
 	}
 
 	return err
 }
 
 func (a activities) CreateFeed(ctx context.Context, feedURL string) (string, error) {
-	feed, err := a.agg.InsertFeed(ctx, feedURL)
-	seyErr := &seyerrs.Error{}
-	if errors.As(err, &seyErr) && seyErr.Status == http.StatusConflict {
+	feed, err := a.feedRepo.InsertFeed(ctx, feedURL)
+	if errors.Is(err, seymour.ErrConflict) {
 		// Fetch the feed from the database
-		feed, err = a.agg.FeedByURL(ctx, feedURL)
+		feed, err = a.feedRepo.FeedByURL(ctx, feedURL)
 		if err != nil {
 			return "", fmt.Errorf("error fetching conflicting feed: %s", err)
 		}
@@ -70,7 +76,7 @@ func (a activities) CreateFeed(ctx context.Context, feedURL string) (string, err
 		return feed.ID, nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("error inserting feed: %w", appErr(err))
+		return "", fmt.Errorf("error inserting feed: %w", err)
 	}
 
 	slog.Debug("inserted feed", "feedID", feed.ID)
@@ -79,7 +85,7 @@ func (a activities) CreateFeed(ctx context.Context, feedURL string) (string, err
 }
 
 func (a activities) RemoveFeed(ctx context.Context, feedID string) error {
-	if err := a.agg.RemoveFeed(ctx, feedID); err != nil {
+	if err := a.feedRepo.DeleteFeed(ctx, feedID); err != nil {
 		return fmt.Errorf("error deleting feed: %w", err)
 	}
 

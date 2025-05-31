@@ -14,6 +14,7 @@ require (
 	github.com/gorilla/securecookie v1.1.2
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/microcosm-cc/bluemonday v1.0.27
+	github.com/sethvargo/go-retry v0.3.0
 	github.com/stretchr/testify v1.10.0
 	go.temporal.io/sdk v1.34.0
 	go.uber.org/fx v1.23.0

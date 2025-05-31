@@ -13,9 +13,9 @@ import (
 	"go.temporal.io/sdk/client"
 	"go.uber.org/fx"
 
-	"github.com/jdholdren/seymour/internal/agg"
 	"github.com/jdholdren/seymour/internal/citadel/db"
 	"github.com/jdholdren/seymour/internal/server"
+	"github.com/jdholdren/seymour/internal/seymour"
 )
 
 type (
@@ -24,9 +24,10 @@ type (
 	Server struct {
 		*http.Server
 
-		repo       db.Repo
-		tempCli    client.Client
-		aggregator agg.Aggregator
+		repo     db.Repo
+		tempCli  client.Client
+		feedRepo seymour.FeedRepo
+		timeline seymour.TimelineRepo
 
 		ghID         string
 		ghSecret     string
@@ -48,10 +49,11 @@ type (
 	Params struct {
 		fx.In
 
-		Config      ServerConfig
-		DB          *sqlx.DB
-		TemporalCli client.Client
-		Aggregator  agg.Aggregator
+		Config       ServerConfig
+		DB           *sqlx.DB
+		TemporalCli  client.Client
+		FeedRepo     seymour.FeedRepo
+		TimelineRepo seymour.TimelineRepo
 	}
 )
 
@@ -70,13 +72,15 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 		ghSecret:     p.Config.GithubClientSecret,
 		repo:         db.NewRepo(p.DB),
 		tempCli:      p.TemporalCli,
-		aggregator:   p.Aggregator,
+		feedRepo:     p.FeedRepo,
+		timeline:     p.TimelineRepo,
 	}
 
 	r.Use(server.AccessLogMiddleware) // Log everything
 	r.HandleFuncE("/api/viewer", srvr.handleViewer).Methods(http.MethodGet)
 	r.HandleFuncE("/api/sso-login", srvr.handleSSORedirect).Methods(http.MethodGet)
 	r.HandleFuncE("/api/sso-callback", srvr.handleSSOCallback).Methods(http.MethodGet)
+	r.HandleFuncE("/api/logout", srvr.getLogout).Methods(http.MethodGet)
 
 	if p.Config.DebugEndpoints {
 		// For local testing
@@ -85,7 +89,8 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 
 	authed := server.ErrRouter{Router: r.NewRoute().Subrouter()}
 	authed.Use(requireSessionMiddleware(srvr.secureCookie))
-	authed.HandleFuncE("/api/subscriptions", srvr.postSusbcription)
+	authed.HandleFuncE("/api/subscriptions", srvr.postSusbcriptions).Methods(http.MethodPost)
+	authed.HandleFuncE("/api/subscriptions", srvr.getSusbcriptions).Methods(http.MethodGet)
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {

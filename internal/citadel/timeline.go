@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/jdholdren/seymour/internal/agg"
 	seyerrs "github.com/jdholdren/seymour/internal/errors"
 	"github.com/jdholdren/seymour/internal/server"
+	"github.com/jdholdren/seymour/internal/seymour"
 	"github.com/jdholdren/seymour/internal/worker"
 )
 
@@ -25,7 +25,7 @@ type FeedResp struct {
 	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
-func apiFeed(f agg.Feed) FeedResp {
+func apiFeed(f seymour.Feed) FeedResp {
 	var (
 		title string
 		desc  string
@@ -48,9 +48,10 @@ func apiFeed(f agg.Feed) FeedResp {
 	}
 }
 
-func (s Server) postSusbcription(w http.ResponseWriter, r *http.Request) error {
+func (s Server) postSusbcriptions(w http.ResponseWriter, r *http.Request) error {
 	var (
 		ctx  = r.Context()
+		sess = session(r, s.secureCookie)
 		body PostSubscriptionReq
 	)
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -63,12 +64,51 @@ func (s Server) postSusbcription(w http.ResponseWriter, r *http.Request) error {
 		// TODO: Other errors should be possible here, like a sync going bad due to a bad url
 		return seyerrs.E(err, http.StatusInternalServerError)
 	}
-	feed, err := s.aggregator.Feed(ctx, feedID)
+	feed, err := s.feedRepo.Feed(ctx, feedID)
 	if err != nil {
 		return err
 	}
 
-	// TODO: Add the feed to the user's subscriptions
+	// Add the feed to the user's subscriptions
+	if err := s.timeline.CreateSubscription(ctx, sess.UserID, feed.ID); err != nil {
+		return err
+	}
 
 	return server.WriteJSON(w, http.StatusCreated, apiFeed(feed))
+}
+
+type SubscriptionResp struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	FeedID    string    `json:"feed_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type SubscriptionListResp struct {
+	Subscriptions []SubscriptionResp `json:"subscriptions"`
+}
+
+func (s Server) getSusbcriptions(w http.ResponseWriter, r *http.Request) error {
+	var (
+		ctx  = r.Context()
+		sess = session(r, s.secureCookie)
+	)
+
+	subs, err := s.timeline.UserSubscriptions(ctx, sess.UserID)
+	if err != nil {
+		return err
+	}
+
+	resp := SubscriptionListResp{
+		Subscriptions: []SubscriptionResp{},
+	}
+	for _, sub := range subs {
+		resp.Subscriptions = append(resp.Subscriptions, SubscriptionResp{
+			ID:        sub.ID,
+			UserID:    sub.UserID,
+			FeedID:    sub.FeedID,
+			CreatedAt: sub.CreatedAt,
+		})
+	}
+	return server.WriteJSON(w, http.StatusCreated, resp)
 }

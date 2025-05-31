@@ -35,3 +35,20 @@ func asSeyerr(err error, seyerr **seyerrs.Error) bool {
 
 	return true
 }
+
+// Turns an error from a app call into a temporal application error.
+//
+// Later can be used with asSeyerr to unwrap the error with the ergo
+// of an actual seymour error.
+func appErr(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	seyerr := &seyerrs.Error{}
+	if errors.As(err, &seyerr) {
+		return temporal.NewApplicationError(seyerr.Error(), "seyerr", seyerr)
+	}
+
+	return err
+}

@@ -6,16 +6,19 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/sethvargo/go-envconfig"
+	"github.com/sethvargo/go-retry"
 	"go.temporal.io/sdk/client"
 	"go.uber.org/fx"
 	_ "golang.org/x/crypto/x509roots/fallback"
 	_ "modernc.org/sqlite"
 
-	"github.com/jdholdren/seymour/internal/agg"
 	"github.com/jdholdren/seymour/internal/logger"
+	"github.com/jdholdren/seymour/internal/seymour"
+	seyqlite "github.com/jdholdren/seymour/internal/sqlite"
 	"github.com/jdholdren/seymour/internal/worker"
 )
 
@@ -44,10 +47,21 @@ func main() {
 	}
 	defer dbx.Close()
 
-	c, err := client.Dial(client.Options{
-		HostPort: cfg.TemporalHostPort,
-	})
-	if err != nil {
+	repo := seyqlite.New(dbx)
+
+	// Retry until temporal is ready
+	var temporalCli client.Client
+	if err := retry.Fibonacci(ctx, 1*time.Second, func(ctx context.Context) error {
+		c, err := client.Dial(client.Options{
+			HostPort: cfg.TemporalHostPort,
+		})
+		if err != nil {
+			return retry.RetryableError(err)
+		}
+		temporalCli = c
+
+		return nil
+	}); err != nil {
 		log.Fatalln("Unable to create Temporal client:", err)
 	}
 
@@ -55,10 +69,10 @@ func main() {
 		fx.Supply(
 			dbx,
 			fx.Annotate(ctx, fx.As(new(context.Context))),
-			fx.Annotate(c, fx.As(new(client.Client))),
+			fx.Annotate(temporalCli, fx.As(new(client.Client))),
+			fx.Annotate(repo, fx.As(new(seymour.FeedRepo))),
 		),
-		agg.Module,
-		fx.Invoke(func(ctx context.Context, a agg.Aggregator, c client.Client) {
+		fx.Invoke(func(ctx context.Context, a seymour.FeedRepo, c client.Client) {
 			worker.RunWorker(ctx, a, c)
 		}), // Start the worker
 	).Run()

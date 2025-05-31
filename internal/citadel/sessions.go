@@ -228,6 +228,11 @@ func (s Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) error 
 	return nil
 }
 
+func (s Server) getLogout(w http.ResponseWriter, r *http.Request) error {
+	setSession(w, s.secureCookie, s.httpsCookies, sessionState{})
+	return nil
+}
+
 type DebugLogin struct {
 	UserID string `json:"user_id"`
 }
