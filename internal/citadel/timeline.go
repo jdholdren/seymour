@@ -89,10 +89,11 @@ func (s Server) postSusbcriptions(w http.ResponseWriter, r *http.Request) error 
 }
 
 type SubscriptionResp struct {
-	ID        string    `json:"id"`
-	UserID    string    `json:"user_id"`
-	FeedID    string    `json:"feed_id"`
-	CreatedAt time.Time `json:"created_at"`
+	ID         string     `json:"id"`
+	FeedID     string     `json:"feed_id"`
+	CreatedAt  time.Time  `json:"created_at"`
+	FeedName   string     `json:"feed_name"`
+	LastSynced *time.Time `json:"last_synced"`
 }
 
 type SubscriptionListResp struct {
@@ -114,11 +115,22 @@ func (s Server) getSusbcriptions(w http.ResponseWriter, r *http.Request) error {
 		Subscriptions: []SubscriptionResp{},
 	}
 	for _, sub := range subs {
+		// Totally inefficient:
+		feed, err := s.feedRepo.Feed(ctx, sub.FeedID)
+		if err != nil {
+			return err
+		}
+		var feedName string
+		if feed.Title != nil {
+			feedName = *feed.Title
+		}
+
 		resp.Subscriptions = append(resp.Subscriptions, SubscriptionResp{
-			ID:        sub.ID,
-			UserID:    sub.UserID,
-			FeedID:    sub.FeedID,
-			CreatedAt: sub.CreatedAt,
+			ID:         sub.ID,
+			FeedID:     sub.FeedID,
+			CreatedAt:  sub.CreatedAt,
+			FeedName:   feedName,
+			LastSynced: feed.LastSyncedAt,
 		})
 	}
 	return server.WriteJSON(w, http.StatusCreated, resp)

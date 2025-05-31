@@ -60,18 +60,6 @@ func Feed(ctx context.Context, feedID, feedURL string) (seymour.Feed, []seymour.
 		}
 	}
 
-	// // Persist the new stuff
-	// if err := a.repo.InsertEntries(ctx, entries); err != nil {
-	// 	return fmt.Errorf("error inserting entries: %s", err)
-	// }
-	// if err := a.repo.UpdateFeed(ctx, feedID, UpdateFeedArgs{
-	// 	Title:       feedResp.Channel[0].Title,
-	// 	Description: feedResp.Channel[0].Title,
-	// 	LastSynced:  time.Now(),
-	// }); err != nil {
-	// 	return fmt.Errorf("error updating feed title: %s", err)
-	// }
-
 	// Only the fields being updated:
 	return seymour.Feed{
 		Title:       &feedResp.Channel[0].Title,
