@@ -2,8 +2,7 @@ CREATE TABLE subscriptions (
 	id TEXT PRIMARY KEY,
 	user_id TEXT NOT NULL,
 	feed_id TEXT NOT NULL,
-	created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
+	created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Index for fast lookups by user

@@ -54,7 +54,7 @@ func main() {
 	slog.SetDefault(l)
 
 	// Connect to the sqlite db
-	dbx, err := sqlx.Open("sqlite", cfg.Database)
+	dbx, err := sqlx.Open("sqlite", fmt.Sprintf("%s?_txlock=immediate&_journal_mode=WAL&_busy_timeout=5000", cfg.Database))
 	if err != nil {
 		log.Fatalf("error opening database: %s", err)
 	}
