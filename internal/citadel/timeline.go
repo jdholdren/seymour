@@ -15,6 +15,14 @@ type PostSubscriptionReq struct {
 	FeedURL string `json:"feed_url"`
 }
 
+func validatePostSubscriptionReq(req PostSubscriptionReq) error {
+	if req.FeedURL == "" {
+		return seyerrs.E("feed_url is required", http.StatusBadRequest)
+	}
+
+	return nil
+}
+
 type FeedResp struct {
 	ID           string     `json:"id"`
 	Title        string     `json:"title"`
@@ -56,6 +64,9 @@ func (s Server) postSusbcriptions(w http.ResponseWriter, r *http.Request) error 
 	)
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		return seyerrs.E(err, http.StatusBadRequest)
+	}
+	if err := validatePostSubscriptionReq(body); err != nil {
+		return err
 	}
 
 	// Start the workflow to create it and verify it

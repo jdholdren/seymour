@@ -21,7 +21,9 @@ type (
 		CreatedAt      time.Time `db:"created_at"`
 
 		// For curation: if the entry has been approved or not by the AI
-		Approved bool `db:"approved"`
+		NeedsApproval bool `db:"needs_approval"`
+		// If the entry is shown to the user
+		Visible bool `db:"visible"`
 	}
 
 	TimelineRepo interface {

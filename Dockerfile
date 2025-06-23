@@ -14,7 +14,7 @@ COPY . .
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -o server $MAIN_PATH
 
-FROM alpine as certs
+FROM alpine AS certs
 RUN apk add -U --no-cache ca-certificates
 
 FROM scratch
