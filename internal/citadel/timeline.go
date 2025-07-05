@@ -6,7 +6,7 @@ import (
 	"time"
 
 	seyerrs "github.com/jdholdren/seymour/internal/errors"
-	"github.com/jdholdren/seymour/internal/server"
+	"github.com/jdholdren/seymour/internal/serverutil"
 	"github.com/jdholdren/seymour/internal/seymour"
 	"github.com/jdholdren/seymour/internal/worker"
 )
@@ -85,7 +85,7 @@ func (s Server) postSusbcriptions(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 
-	return server.WriteJSON(w, http.StatusCreated, apiFeed(feed))
+	return serverutil.WriteJSON(w, http.StatusCreated, apiFeed(feed))
 }
 
 type SubscriptionResp struct {
@@ -133,5 +133,5 @@ func (s Server) getSusbcriptions(w http.ResponseWriter, r *http.Request) error {
 			LastSynced: feed.LastSyncedAt,
 		})
 	}
-	return server.WriteJSON(w, http.StatusCreated, resp)
+	return serverutil.WriteJSON(w, http.StatusCreated, resp)
 }

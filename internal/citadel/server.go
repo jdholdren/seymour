@@ -14,7 +14,7 @@ import (
 	"go.uber.org/fx"
 
 	"github.com/jdholdren/seymour/internal/citadel/db"
-	"github.com/jdholdren/seymour/internal/server"
+	"github.com/jdholdren/seymour/internal/serverutil"
 	"github.com/jdholdren/seymour/internal/seymour"
 )
 
@@ -58,7 +58,7 @@ type (
 )
 
 func NewServer(lc fx.Lifecycle, p Params) Server {
-	r := server.ErrRouter{Router: mux.NewRouter()}
+	r := serverutil.ErrRouter{Router: mux.NewRouter()}
 	srvr := Server{
 		Server: &http.Server{
 			Addr:         fmt.Sprintf(":%d", p.Config.Port),
@@ -76,7 +76,7 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 		timeline:     p.TimelineRepo,
 	}
 
-	r.Use(server.AccessLogMiddleware) // Log everything
+	r.Use(serverutil.AccessLogMiddleware) // Log everything
 	r.HandleFuncE("/api/viewer", srvr.handleViewer).Methods(http.MethodGet)
 	r.HandleFuncE("/api/sso-login", srvr.handleSSORedirect).Methods(http.MethodGet)
 	r.HandleFuncE("/api/sso-callback", srvr.handleSSOCallback).Methods(http.MethodGet)
@@ -87,7 +87,7 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 		r.HandleFuncE("/api/login", srvr.handleDebugLogin).Methods(http.MethodPost)
 	}
 
-	authed := server.ErrRouter{Router: r.NewRoute().Subrouter()}
+	authed := serverutil.ErrRouter{Router: r.NewRoute().Subrouter()}
 	authed.Use(requireSessionMiddleware(srvr.secureCookie))
 	authed.HandleFuncE("/api/subscriptions", srvr.postSusbcriptions).Methods(http.MethodPost)
 	authed.HandleFuncE("/api/subscriptions", srvr.getSusbcriptions).Methods(http.MethodGet)
@@ -118,14 +118,14 @@ type Viewer struct {
 func (s Server) handleViewer(w http.ResponseWriter, r *http.Request) error {
 	sess := session(r, s.secureCookie)
 	if sess.UserID == "" {
-		return server.WriteJSON(w, http.StatusOK, struct{}{})
+		return serverutil.WriteJSON(w, http.StatusOK, struct{}{})
 	}
 	usr, err := s.repo.User(r.Context(), sess.UserID)
 	if err != nil {
 		return err
 	}
 
-	return server.WriteJSON(w, http.StatusOK, Viewer{
+	return serverutil.WriteJSON(w, http.StatusOK, Viewer{
 		UserID:    usr.ID,
 		Email:     usr.Email,
 		CreatedAt: usr.CreatedAt,
