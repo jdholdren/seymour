@@ -7,13 +7,13 @@ services:
         MAIN_PATH: ./cmd/worker
     environment:
       - DATABASE=/data/citadel.sqlite
-      - TEMPORAL_HOST_PORT=host.docker.internal:7233
+      - TEMPORAL_HOST_PORT=host.docker.internal:7236
     volumes:
       - type: bind
         source: ./data/citadel
         target: /data
     depends_on:
-      - temporal
+      - temporal-server
   api:
     build:
       context: .
@@ -25,7 +25,7 @@ services:
     env_file: .env
     environment:
       - DATABASE=/data/citadel.sqlite
-      - TEMPORAL_HOST_PORT=host.docker.internal:7233
+      - TEMPORAL_HOST_PORT=host.docker.internal:7236
       - PORT=4444
       - HTTPS_COOKIES=false
       - DEBUG_ENDPOINTS=true
@@ -34,18 +34,20 @@ services:
         source: ./data/citadel
         target: /data
     depends_on:
-      - temporal
-  temporal:
+      - temporal-server
+  temporal-server:
     build:
-      dockerfile: ./temporalite/Dockerfile
+      context: ./temporalite/server
+      dockerfile: ./Dockerfile
+    ports:
+      - "7236:7236"
+    # volumes:
+    # - ./data/temporal:/etc/temporal/
+    restart: unless-stopped
+  temporal-ui:
+    build:
+      context: ./temporalite/ui
+      dockerfile: ./Dockerfile
     ports:
       - "8233:8233"
-      - "7233:7233"
-    volumes:
-      - ./data/temporal:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8233"] # Await the UI, not pretty but it works
-      interval: 2s
-      timeout: 1s
-      retries: 3
     restart: unless-stopped
