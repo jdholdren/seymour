@@ -54,6 +54,7 @@ func main() {
 	if err := retry.Fibonacci(ctx, 1*time.Second, func(ctx context.Context) error {
 		c, err := client.Dial(client.Options{
 			HostPort: cfg.TemporalHostPort,
+			Logger:   slog.Default(),
 		})
 		if err != nil {
 			return retry.RetryableError(err)
@@ -70,10 +71,16 @@ func main() {
 			dbx,
 			fx.Annotate(ctx, fx.As(new(context.Context))),
 			fx.Annotate(temporalCli, fx.As(new(client.Client))),
-			fx.Annotate(repo, fx.As(new(seymour.FeedRepo))),
+			fx.Annotate(repo, fx.As(new(seymour.FeedService))),
+			fx.Annotate(repo, fx.As(new(seymour.TimelineService))),
 		),
-		fx.Invoke(func(ctx context.Context, a seymour.FeedRepo, c client.Client) {
-			worker.RunWorker(ctx, a, c)
+		fx.Invoke(func(
+			ctx context.Context,
+			a seymour.FeedService,
+			c client.Client,
+			t seymour.TimelineService,
+		) {
+			worker.RunWorker(ctx, a, t, c)
 		}), // Start the worker
 	).Run()
 }

@@ -16,6 +16,7 @@ require (
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/sethvargo/go-retry v0.3.0
 	github.com/stretchr/testify v1.10.0
+	go.temporal.io/api v1.46.0
 	go.temporal.io/sdk v1.34.0
 	go.uber.org/fx v1.23.0
 	golang.org/x/crypto/x509roots/fallback v0.0.0-20250515174705-ebc8e4631531
@@ -42,7 +43,6 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	github.com/robfig/cron v1.2.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
-	go.temporal.io/api v1.46.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/dig v1.18.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect

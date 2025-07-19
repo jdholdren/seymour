@@ -3,16 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/fs"
 	"log"
 	"log/slog"
 	"os"
 	"os/signal"
 	"time"
 
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/sqlite"
-	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jmoiron/sqlx"
 	"github.com/sethvargo/go-envconfig"
 	"github.com/sethvargo/go-retry"
@@ -54,14 +50,14 @@ func main() {
 	slog.SetDefault(l)
 
 	// Connect to the sqlite db
-	dbx, err := sqlx.Open("sqlite", fmt.Sprintf("%s?_txlock=immediate&_journal_mode=WAL&_busy_timeout=5000", cfg.Database))
+	dbx, err := sqlx.Open("sqlite", fmt.Sprintf("%s?_txlock=immediate&_busy_timeout=5000", cfg.Database))
 	if err != nil {
 		log.Fatalf("error opening database: %s", err)
 	}
 	defer dbx.Close()
 
 	// Run all migrations
-	if err := runMigrations(dbx, migrations.Migrations, "."); err != nil {
+	if err := migrations.Run(dbx); err != nil {
 		log.Fatalf("error running migrations: %s", err)
 	}
 
@@ -98,32 +94,10 @@ func main() {
 			dbx,
 			fx.Annotate(ctx, fx.As(new(context.Context))),
 			fx.Annotate(temporalCli, fx.As(new(client.Client))),
-			fx.Annotate(repo, fx.As(new(seymour.FeedRepo))),
-			fx.Annotate(repo, fx.As(new(seymour.TimelineRepo))),
+			fx.Annotate(repo, fx.As(new(seymour.FeedService))),
+			fx.Annotate(repo, fx.As(new(seymour.TimelineService))),
 		),
 		citadel.Module,
 		fx.Invoke(func(citadel.Server) {}), // Start the BFF server
 	).Run()
-}
-
-// Performs all migrations in the given filesystem.
-func runMigrations(dbx *sqlx.DB, fs fs.FS, dirName string) error {
-	d, err := iofs.New(fs, dirName)
-	if err != nil {
-		return fmt.Errorf("error creating migrations source: %s", err)
-	}
-	i, err := sqlite.WithInstance(dbx.DB, &sqlite.Config{})
-	if err != nil {
-		return fmt.Errorf("error creating sqlite instance for migration: %s", err)
-	}
-	migrator, err := migrate.NewWithInstance("iofs", d, "sqlite3", i)
-	if err != nil {
-		return fmt.Errorf("error creating migrator: %s", err)
-	}
-	if err := migrator.Up(); err != nil && err != migrate.ErrNoChange {
-		return fmt.Errorf("error migrating: %s", err)
-	}
-	slog.Info("migrated")
-
-	return nil
 }

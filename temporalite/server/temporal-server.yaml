@@ -40,7 +40,7 @@ services:
       grpcPort: 7236
       membershipPort: 6933
       bindOnIP: "0.0.0.0"
-      httpPort: 7243
+      httpPort: 7233
 
   matching:
     rpc:

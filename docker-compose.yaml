@@ -9,9 +9,7 @@ services:
       - DATABASE=/data/citadel.sqlite
       - TEMPORAL_HOST_PORT=host.docker.internal:7236
     volumes:
-      - type: bind
-        source: ./data/citadel
-        target: /data
+      - ./data/citadel/citadel.sqlite:/data/citadel.sqlite
     depends_on:
       - temporal-server
   api:
@@ -30,9 +28,7 @@ services:
       - HTTPS_COOKIES=false
       - DEBUG_ENDPOINTS=true
     volumes:
-      - type: bind
-        source: ./data/citadel
-        target: /data
+      - ./data/citadel/citadel.sqlite:/data/citadel.sqlite
     depends_on:
       - temporal-server
   temporal-server:
@@ -41,6 +37,8 @@ services:
       dockerfile: ./Dockerfile
     ports:
       - "7236:7236"
+      - "7233:7233"
+    # Issues with the bind overwriting particular things inside the container, need to bind specifically
     # volumes:
     # - ./data/temporal:/etc/temporal/
     restart: unless-stopped

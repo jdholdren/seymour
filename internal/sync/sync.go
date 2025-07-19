@@ -62,6 +62,7 @@ func Feed(ctx context.Context, feedID, feedURL string) (seymour.Feed, []seymour.
 
 	// Only the fields being updated:
 	return seymour.Feed{
+		ID:          feedID,
 		Title:       &feedResp.Channel[0].Title,
 		Description: &feedResp.Channel[0].Description,
 	}, entries, nil

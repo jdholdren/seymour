@@ -84,8 +84,8 @@ func (f HandlerFuncE) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Either it's already a structured error, or coerce it to one
 	sErr := &seyerrs.Error{}
 	if !errors.As(err, &sErr) {
-		slog.Info("non seyerr")
-		sErr = seyerrs.E(http.StatusInternalServerError, err)
+		slog.Error("non seyerr", "err", err)
+		sErr = seyerrs.E(http.StatusInternalServerError, "internal server error")
 	}
 
 	if err := WriteJSON(w, sErr.Status, sErr); err != nil {

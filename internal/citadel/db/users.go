@@ -2,9 +2,12 @@ package db
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jdholdren/seymour/internal/seymour"
 )
 
 const userNamespace = "-usr"
@@ -34,7 +37,11 @@ func (r Repo) User(ctx context.Context, id string) (User, error) {
 	const q = `SELECT * FROM users WHERE id = ?;`
 
 	var usr User
-	if err := r.db.GetContext(ctx, &usr, q, id); err != nil {
+	err := r.db.GetContext(ctx, &usr, q, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return User{}, seymour.ErrNotFound
+	}
+	if err != nil {
 		return User{}, err
 	}
 

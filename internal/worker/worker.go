@@ -12,9 +12,10 @@ import (
 const TaskQueue = "shared"
 
 // RunWorker runs a Workflow and Activity worker for the Billing system.
-func RunWorker(ctx context.Context, repo seymour.FeedRepo, cli client.Client) error {
+func RunWorker(ctx context.Context, feedService seymour.FeedService, tlService seymour.TimelineService, cli client.Client) error {
 	a := activities{
-		feedRepo: repo,
+		feedService:     feedService,
+		timelineService: tlService,
 	}
 
 	w := worker.New(cli, TaskQueue, worker.Options{})
@@ -24,6 +25,8 @@ func RunWorker(ctx context.Context, repo seymour.FeedRepo, cli client.Client) er
 	w.RegisterWorkflow(wfs.SyncIndividual)
 	w.RegisterWorkflow(wfs.SyncAll)
 	w.RegisterWorkflow(wfs.CreateFeed)
+	w.RegisterWorkflow(wfs.RefreshTimelines)
+	w.RegisterWorkflow(wfs.JudgeTimeline)
 
 	// Activities
 	w.RegisterActivity(a.SyncFeed)
@@ -31,8 +34,13 @@ func RunWorker(ctx context.Context, repo seymour.FeedRepo, cli client.Client) er
 	w.RegisterActivity(a.RemoveFeed)
 	w.RegisterActivity(a.CreateFeed)
 	w.RegisterActivity(a.Feed)
+	w.RegisterActivity(a.InsertMissingTimelineEntries)
+	w.RegisterActivity(a.NeedingJudgement)
+	w.RegisterActivity(a.JudgeEntries)
+	w.RegisterActivity(a.MarkEntriesAsJudged)
 
-	// Schedules
+	// Schedules:
+	// Sync RSS feeds
 	cli.ScheduleClient().Create(ctx, client.ScheduleOptions{
 		ID: "sync_all",
 		Spec: client.ScheduleSpec{
@@ -41,6 +49,18 @@ func RunWorker(ctx context.Context, repo seymour.FeedRepo, cli client.Client) er
 		Action: &client.ScheduleWorkflowAction{
 			ID:        "sync_all",
 			Workflow:  wfs.SyncAll,
+			TaskQueue: TaskQueue,
+		},
+	})
+	// Refresh timelines
+	cli.ScheduleClient().Create(ctx, client.ScheduleOptions{
+		ID: "refresh_timelines",
+		Spec: client.ScheduleSpec{
+			Intervals: []client.ScheduleIntervalSpec{{Every: 15 * time.Minute}},
+		},
+		Action: &client.ScheduleWorkflowAction{
+			ID:        "refresh_timelines",
+			Workflow:  wfs.RefreshTimelines,
 			TaskQueue: TaskQueue,
 		},
 	})

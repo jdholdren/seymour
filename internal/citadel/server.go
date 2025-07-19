@@ -2,6 +2,7 @@ package citadel
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -26,8 +27,8 @@ type (
 
 		repo     db.Repo
 		tempCli  client.Client
-		feedRepo seymour.FeedRepo
-		timeline seymour.TimelineRepo
+		feedRepo seymour.FeedService
+		timeline seymour.TimelineService
 
 		ghID         string
 		ghSecret     string
@@ -52,8 +53,8 @@ type (
 		Config       ServerConfig
 		DB           *sqlx.DB
 		TemporalCli  client.Client
-		FeedRepo     seymour.FeedRepo
-		TimelineRepo seymour.TimelineRepo
+		FeedRepo     seymour.FeedService
+		TimelineRepo seymour.TimelineService
 	}
 )
 
@@ -121,6 +122,9 @@ func (s Server) handleViewer(w http.ResponseWriter, r *http.Request) error {
 		return serverutil.WriteJSON(w, http.StatusOK, struct{}{})
 	}
 	usr, err := s.repo.User(r.Context(), sess.UserID)
+	if errors.Is(err, seymour.ErrNotFound) {
+		return serverutil.WriteJSON(w, http.StatusOK, struct{}{})
+	}
 	if err != nil {
 		return err
 	}
