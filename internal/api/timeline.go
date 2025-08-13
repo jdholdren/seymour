@@ -1,4 +1,4 @@
-package citadel
+package api
 
 import (
 	"encoding/json"

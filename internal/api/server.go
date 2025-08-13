@@ -1,4 +1,4 @@
-package citadel
+package api
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"go.temporal.io/sdk/client"
 	"go.uber.org/fx"
 
-	"github.com/jdholdren/seymour/internal/citadel/db"
+	"github.com/jdholdren/seymour/internal/api/db"
 	"github.com/jdholdren/seymour/internal/serverutil"
 	"github.com/jdholdren/seymour/internal/seymour"
 )

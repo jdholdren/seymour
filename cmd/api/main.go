@@ -16,7 +16,7 @@ import (
 	"go.uber.org/fx"
 	_ "modernc.org/sqlite"
 
-	"github.com/jdholdren/seymour/internal/citadel"
+	"github.com/jdholdren/seymour/internal/api"
 	"github.com/jdholdren/seymour/internal/logger"
 	"github.com/jdholdren/seymour/internal/migrations"
 	"github.com/jdholdren/seymour/internal/seymour"
@@ -82,7 +82,7 @@ func main() {
 	// Start the application
 	fx.New(
 		fx.Supply(
-			citadel.ServerConfig{
+			api.ServerConfig{
 				Port:               cfg.Port,
 				GithubClientID:     cfg.GithubClientID,
 				GithubClientSecret: cfg.GithubClientSecret,
@@ -97,7 +97,7 @@ func main() {
 			fx.Annotate(repo, fx.As(new(seymour.FeedService))),
 			fx.Annotate(repo, fx.As(new(seymour.TimelineService))),
 		),
-		citadel.Module,
-		fx.Invoke(func(citadel.Server) {}), // Start the BFF server
+		api.Module,
+		fx.Invoke(func(api.Server) {}), // Start the BFF server
 	).Run()
 }

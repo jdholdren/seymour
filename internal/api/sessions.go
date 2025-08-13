@@ -1,4 +1,4 @@
-package citadel
+package api
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/securecookie"
 
-	"github.com/jdholdren/seymour/internal/citadel/db"
+	"github.com/jdholdren/seymour/internal/api/db"
 )
 
 const sessionCookieName = "citadel_session"
