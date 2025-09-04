@@ -5,18 +5,22 @@ ARG MAIN_PATH
 WORKDIR /app
 
 # Copy go mod and sum files
-RUN go env -w GOCACHE=/go-cache
-RUN go env -w GOMODCACHE=/gomod-cache
 COPY go.mod go.sum ./
-RUN --mount=type=cache,target=/gomod-cache \
+RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
+
+# Use another cache mount for the Go build cache itself, which stores
+# compiled packages.
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    go env -w GOCACHE=/root/.cache/go-build
 
 # Copy source code
 COPY . .
 
 # Build the application
-RUN --mount=type=cache,target=/gomod-cache --mount=type=cache,target=/go-cache \
-    CGO_ENABLED=0 GOOS=linux go build -a -o server $MAIN_PATH
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -v -o server $MAIN_PATH
 
 FROM alpine AS certs
 RUN apk add -U --no-cache ca-certificates
