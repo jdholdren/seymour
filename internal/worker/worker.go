@@ -41,7 +41,7 @@ func RunWorker(ctx context.Context, feedService seymour.FeedService, tlService s
 
 	// Schedules:
 	// Sync RSS feeds
-	cli.ScheduleClient().Create(ctx, client.ScheduleOptions{
+	handle, _ := cli.ScheduleClient().Create(ctx, client.ScheduleOptions{
 		ID: "sync_all",
 		Spec: client.ScheduleSpec{
 			Intervals: []client.ScheduleIntervalSpec{{Every: 15 * time.Minute}},
@@ -52,8 +52,15 @@ func RunWorker(ctx context.Context, feedService seymour.FeedService, tlService s
 			TaskQueue: TaskQueue,
 		},
 	})
+	handle.Update(ctx, client.ScheduleUpdateOptions{
+		DoUpdate: func(input client.ScheduleUpdateInput) (*client.ScheduleUpdate, error) {
+			return &client.ScheduleUpdate{
+				Schedule: &input.Description.Schedule,
+			}, nil
+		},
+	})
 	// Refresh timelines
-	cli.ScheduleClient().Create(ctx, client.ScheduleOptions{
+	handle, _ = cli.ScheduleClient().Create(ctx, client.ScheduleOptions{
 		ID: "refresh_timelines",
 		Spec: client.ScheduleSpec{
 			Intervals: []client.ScheduleIntervalSpec{{Every: 15 * time.Minute}},
@@ -62,6 +69,13 @@ func RunWorker(ctx context.Context, feedService seymour.FeedService, tlService s
 			ID:        "refresh_timelines",
 			Workflow:  wfs.RefreshTimelines,
 			TaskQueue: TaskQueue,
+		},
+	})
+	handle.Update(ctx, client.ScheduleUpdateOptions{
+		DoUpdate: func(input client.ScheduleUpdateInput) (*client.ScheduleUpdate, error) {
+			return &client.ScheduleUpdate{
+				Schedule: &input.Description.Schedule,
+			}, nil
 		},
 	})
 
