@@ -26,7 +26,7 @@ func RunWorker(ctx context.Context, feedService seymour.FeedService, tlService s
 	w.RegisterWorkflow(wfs.SyncAll)
 	w.RegisterWorkflow(wfs.CreateFeed)
 	w.RegisterWorkflow(wfs.RefreshTimelines)
-	w.RegisterWorkflow(wfs.JudgeTimeline)
+	w.RegisterWorkflow(wfs.JudgeUserTimeline)
 
 	// Activities
 	w.RegisterActivity(a.SyncFeed)

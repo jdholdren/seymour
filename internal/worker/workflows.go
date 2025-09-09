@@ -162,19 +162,23 @@ func (workflows) RefreshTimelines(ctx workflow.Context) error {
 	// Refresh the timelines for each user
 	for _, userID := range users {
 		// Start child workflow to judge each member's timeline
-		cwo := workflow.ChildWorkflowOptions{
+		ctx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
 			// Ensure only one judgement at a time, allow current one to process
-			WorkflowID:            "judge-timeline-" + userID,
-			WorkflowIDReusePolicy: enums.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
+			WorkflowID:            "judge-user-timeline-" + userID,
+			WorkflowIDReusePolicy: enums.WORKFLOW_ID_REUSE_POLICY_TERMINATE_IF_RUNNING,
+			ParentClosePolicy:     enums.PARENT_CLOSE_POLICY_ABANDON,
+			TaskQueue:             TaskQueue,
+		})
+		if err := workflow.ExecuteChildWorkflow(ctx, workflows.JudgeUserTimeline, userID).GetChildWorkflowExecution().Get(ctx, nil); err != nil {
+			l.Error("failed to start child workflow", "error", err)
+			return err
 		}
-		ctx := workflow.WithChildOptions(ctx, cwo)
-		workflow.ExecuteChildWorkflow(ctx, workflows.JudgeTimeline, userID)
 	}
 
 	return nil
 }
 
-func (workflows) JudgeTimeline(ctx workflow.Context, userID string) error {
+func (workflows) JudgeUserTimeline(ctx workflow.Context, userID string) error {
 	options := workflow.ActivityOptions{
 		StartToCloseTimeout: 3 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
