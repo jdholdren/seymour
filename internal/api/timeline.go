@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gorilla/mux"
 	seyerrs "github.com/jdholdren/seymour/internal/errors"
 	"github.com/jdholdren/seymour/internal/serverutil"
 	"github.com/jdholdren/seymour/internal/seymour"
@@ -142,4 +143,74 @@ func (s Server) getSusbcriptions(w http.ResponseWriter, r *http.Request) error {
 		})
 	}
 	return serverutil.WriteJSON(w, http.StatusCreated, resp)
+}
+
+type TimelineResp struct {
+	Items []TimelineEntry `json:"items"`
+	// TODO: Pagination details
+}
+
+type TimelineEntry struct {
+	FeedName    string `json:"feed_name"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
+// TODO: Take in query params for cursor pagination
+func (s Server) getUserTimeline(w http.ResponseWriter, r *http.Request) error {
+	var (
+		ctx     = r.Context()
+		session = session(r, s.secureCookie)
+		userID  = mux.Vars(r)["userID"]
+	)
+
+	// Only let the current user see their own timeline
+	if session.UserID != userID {
+		return seyerrs.E("not allowed", http.StatusForbidden)
+	}
+
+	tlEnts, err := s.timeline.UserTimelineEntries(ctx, userID, seymour.UserTimelineEntriesArgs{
+		Status: seymour.TimelineEntryStatusApproved,
+	})
+	if err != nil {
+		return err
+	}
+
+	feedEntIDs := make([]string, 0, len(tlEnts))
+	for _, ent := range tlEnts {
+		feedEntIDs = append(feedEntIDs, ent.FeedEntryID)
+	}
+
+	feedEnts, err := s.feedRepo.Entries(ctx, feedEntIDs)
+	if err != nil {
+		return err
+	}
+
+	feedIDs := make([]string, 0, len(feedEnts))
+	for _, ent := range feedEnts {
+		feedIDs = append(feedIDs, ent.FeedID)
+	}
+
+	feeds, err := s.feedRepo.Feeds(ctx, feedIDs)
+	if err != nil {
+		return err
+	}
+	// Turn into a map for fast lookup
+	feedByID := make(map[string]seymour.Feed)
+	for _, feed := range feeds {
+		feedByID[feed.ID] = feed
+	}
+
+	resp := TimelineResp{
+		Items: make([]TimelineEntry, 0, len(tlEnts)),
+	}
+	for _, ent := range feedEnts {
+		feed := feedByID[ent.FeedID]
+		resp.Items = append(resp.Items, TimelineEntry{
+			FeedName:    *feed.Title,
+			Title:       ent.Title,
+			Description: ent.Description,
+		})
+	}
+	return serverutil.WriteJSON(w, http.StatusOK, resp)
 }

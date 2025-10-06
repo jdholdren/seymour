@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	sq "github.com/Masterminds/squirrel"
 	"github.com/google/uuid"
+
 	"github.com/jdholdren/seymour/internal/seymour"
 )
 
@@ -93,24 +95,21 @@ func (r Repo) InsertEntry(ctx context.Context, entry seymour.TimelineEntry) erro
 	return nil
 }
 
-func (r Repo) EntriesNeedingJudgement(ctx context.Context, userID string) ([]seymour.TimelineEntryWithFeed, error) {
+func (r Repo) EntriesNeedingJudgement(ctx context.Context, userID string) ([]seymour.TimelineEntry, error) {
 	const q = `
 	SELECT
-		fe.id,
-		fe.feed_id,
-		fe.guid,
-		fe.title,
-		fe.description,
-		fe.created_at,
-		te.id AS timeline_entry_id
+		id,
+		user_id,
+		feed_entry_id,
+		created_at,
+		status
 	FROM
-		timeline_entries te
-		INNER JOIN feed_entries fe ON fe.id = te.feed_entry_id
+		timeline_entries
 	WHERE
-		te.user_id = ? AND te.status = ?;
+		user_id = ? AND status = ?;
 	`
 
-	var entries []seymour.TimelineEntryWithFeed
+	var entries []seymour.TimelineEntry
 	if err := r.db.SelectContext(ctx, &entries, q, userID, seymour.TimelineEntryStatusRequiresJudgement); err != nil {
 		return nil, fmt.Errorf("error selecting entries needing judgement: %s", err)
 	}
@@ -125,4 +124,30 @@ func (r Repo) UpdateTimelineEntry(ctx context.Context, id string, status seymour
 	}
 
 	return nil
+}
+
+func (r Repo) UserTimelineEntries(ctx context.Context, userID string, args seymour.UserTimelineEntriesArgs) ([]seymour.TimelineEntry, error) {
+	q := sq.Select("id", "user_id", "feed_entry_id", "created_at", "status").From("timeline_entries").OrderBy("created_at DESC")
+	where := sq.Eq{
+		"user_id": userID,
+	}
+	if args.Status != "" {
+		where["status"] = args.Status
+	}
+	if args.Limit > 0 {
+		q = q.Limit(args.Limit)
+	}
+	q = q.Where(where)
+
+	query, queryArgs, err := q.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("error generating SQL query: %s", err)
+	}
+
+	var entries []seymour.TimelineEntry
+	if err := r.db.SelectContext(ctx, &entries, query, queryArgs...); err != nil {
+		return nil, fmt.Errorf("error selecting user timeline entries: %s", err)
+	}
+
+	return entries, nil
 }

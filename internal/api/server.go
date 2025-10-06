@@ -95,8 +95,15 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 
 	authed := serverutil.ErrRouter{Router: r.NewRoute().Subrouter()}
 	authed.Use(requireSessionMiddleware(srvr.secureCookie))
+
+	// Subscription management
+	//
+	// TODO: Make these specific to a user
 	authed.HandleFuncE("/api/subscriptions", srvr.postSusbcriptions).Methods(http.MethodPost)
 	authed.HandleFuncE("/api/subscriptions", srvr.getSusbcriptions).Methods(http.MethodGet)
+
+	// Timeline view
+	authed.HandleFuncE("/api/users/{userID}/timeline", srvr.getUserTimeline).Methods(http.MethodGet)
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {

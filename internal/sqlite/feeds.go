@@ -34,6 +34,24 @@ func (r Repo) Feed(ctx context.Context, id string) (seymour.Feed, error) {
 	return feed, nil
 }
 
+func (r Repo) Feeds(ctx context.Context, ids []string) ([]seymour.Feed, error) {
+	if len(ids) == 0 {
+		return []seymour.Feed{}, nil
+	}
+
+	query, args, err := sq.Select("*").From("feeds").Where(sq.Eq{"id": ids}).ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("error constructing sql: %s", err)
+	}
+
+	var feeds []seymour.Feed
+	if err := r.db.SelectContext(ctx, &feeds, query, args...); err != nil {
+		return nil, fmt.Errorf("error fetching feeds: %s", err)
+	}
+
+	return feeds, nil
+}
+
 func (r Repo) FeedByURL(ctx context.Context, url string) (seymour.Feed, error) {
 	const q = `SELECT * FROM feeds WHERE url = ?;`
 
@@ -101,6 +119,24 @@ func (r Repo) Entry(ctx context.Context, id string) (seymour.FeedEntry, error) {
 	}
 
 	return entry, nil
+}
+
+func (r Repo) Entries(ctx context.Context, ids []string) ([]seymour.FeedEntry, error) {
+	if len(ids) == 0 {
+		return []seymour.FeedEntry{}, nil
+	}
+
+	query, args, err := sq.Select("*").From("feed_entries").Where(sq.Eq{"id": ids}).ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("error constructing sql: %s", err)
+	}
+
+	var entries []seymour.FeedEntry
+	if err := r.db.SelectContext(ctx, &entries, query, args...); err != nil {
+		return nil, fmt.Errorf("error fetching entries: %s", err)
+	}
+
+	return entries, nil
 }
 
 func (r Repo) InsertEntries(ctx context.Context, entries []seymour.FeedEntry) error {

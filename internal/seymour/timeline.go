@@ -15,7 +15,7 @@ type (
 		EntriesNeedingJudgement(ctx context.Context, userID string) ([]TimelineEntry, error)
 		InsertEntry(ctx context.Context, entry TimelineEntry) error
 		UpdateTimelineEntry(ctx context.Context, id string, status TimelineEntryStatus) error
-		UserTimelineEntries(ctx context.Context, userID string) ([]TimelineEntry, error)
+		UserTimelineEntries(ctx context.Context, userID string, args UserTimelineEntriesArgs) ([]TimelineEntry, error)
 	}
 
 	Subscription struct {
@@ -39,6 +39,11 @@ type (
 	MissingEntry struct {
 		FeedEntryID string `db:"feed_entry_id"`
 		UserID      string `db:"user_id"`
+	}
+
+	UserTimelineEntriesArgs struct {
+		Status TimelineEntryStatus // To optionally filter by status
+		Limit  uint64              // To optionally limit the number of entries returned
 	}
 )
 

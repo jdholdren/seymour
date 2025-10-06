@@ -8,11 +8,13 @@ import (
 type (
 	FeedService interface {
 		Feed(ctx context.Context, id string) (Feed, error)
+		Feeds(ctx context.Context, ids []string) ([]Feed, error)
 		FeedByURL(ctx context.Context, url string) (Feed, error)
 		InsertFeed(ctx context.Context, url string) (Feed, error)
 		DeleteFeed(ctx context.Context, id string) error
 		AllFeeds(ctx context.Context) ([]Feed, error)
 		Entry(ctx context.Context, id string) (FeedEntry, error)
+		Entries(ctx context.Context, ids []string) ([]FeedEntry, error)
 		InsertEntries(ctx context.Context, entries []FeedEntry) error
 		UpdateFeed(ctx context.Context, id string, args UpdateFeedArgs) error
 	}
