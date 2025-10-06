@@ -60,7 +60,6 @@ func registerEverything(ctx context.Context, w worker.Worker, a activities, cli 
 	w.RegisterActivity(a.CreateFeed)
 	w.RegisterActivity(a.Feed)
 	w.RegisterActivity(a.InsertMissingTimelineEntries)
-	w.RegisterActivity(a.NeedingJudgement)
 	w.RegisterActivity(a.JudgeEntries)
 	w.RegisterActivity(a.MarkEntriesAsJudged)
 

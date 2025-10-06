@@ -190,16 +190,9 @@ func (workflows) JudgeUserTimeline(ctx workflow.Context, userID string) error {
 	ctx = workflow.WithActivityOptions(ctx, options)
 	l := workflow.GetLogger(ctx)
 
-	// Get all entries needing judgement
-	var entries []seymour.TimelineEntryWithFeed
-	if err := workflow.ExecuteActivity(ctx, acts.NeedingJudgement, userID).Get(ctx, &entries); err != nil {
-		l.Error("failed to get entries needing judgement", "error", err)
-		return err
-	}
-
 	// Judge entries
 	var j judgements
-	if err := workflow.ExecuteActivity(ctx, acts.JudgeEntries, userID, entries).Get(ctx, &j); err != nil {
+	if err := workflow.ExecuteActivity(ctx, acts.JudgeEntries, userID).Get(ctx, &j); err != nil {
 		l.Error("failed to judge entries", "error", err)
 		return err
 	}

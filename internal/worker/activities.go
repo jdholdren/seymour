@@ -130,25 +130,21 @@ func (a activities) InsertMissingTimelineEntries(ctx context.Context) ([]string,
 	return users, nil
 }
 
-func (a activities) NeedingJudgement(ctx context.Context, userID string) ([]seymour.TimelineEntryWithFeed, error) {
+// Type that holds a timeline entry ID and whether it has been approved.
+type judgements map[string]bool
+
+// Fetch the entries needing judgement, then send them out
+func (a activities) JudgeEntries(ctx context.Context, userID string) (judgements, error) {
+	// TODO: Send to AI for judgement, if user has an AI configuration
 	entries, err := a.timelineService.EntriesNeedingJudgement(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("error finding needing judgement timeline entries: %s", err)
 	}
 
-	return entries, nil
-}
-
-// Type that holds a timeline entry ID and whether it has been approved.
-type judgements map[string]bool
-
-func (a activities) JudgeEntries(ctx context.Context, userID string, entries []seymour.TimelineEntryWithFeed) (judgements, error) {
-	// TODO: Send to AI for judgement, if user has an AI configuration
-
 	// For now, just approve all entries
 	j := make(judgements)
 	for _, entry := range entries {
-		j[entry.TimelineEntryID] = true
+		j[entry.ID] = true
 	}
 
 	return j, nil
