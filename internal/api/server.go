@@ -13,6 +13,8 @@ import (
 	"github.com/jmoiron/sqlx"
 	"go.temporal.io/sdk/client"
 	"go.uber.org/fx"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/github"
 
 	"github.com/jdholdren/seymour/internal/api/db"
 	"github.com/jdholdren/seymour/internal/serverutil"
@@ -30,10 +32,9 @@ type (
 		feedRepo seymour.FeedService
 		timeline seymour.TimelineService
 
-		ghID         string
-		ghSecret     string
-		secureCookie *securecookie.SecureCookie
-		httpsCookies bool // Whether or not HTTPS should be used for cookies
+		ghOauthConfig oauth2.Config
+		secureCookie  *securecookie.SecureCookie
+		httpsCookies  bool // Whether or not HTTPS should be used for cookies
 	}
 
 	ServerConfig struct {
@@ -69,12 +70,16 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 		},
 		secureCookie: securecookie.New(p.Config.CookieHashKey, p.Config.CookieBlockKey),
 		httpsCookies: p.Config.HttpsCookies,
-		ghID:         p.Config.GithubClientID,
-		ghSecret:     p.Config.GithubClientSecret,
-		repo:         db.NewRepo(p.DB),
-		tempCli:      p.TemporalCli,
-		feedRepo:     p.FeedRepo,
-		timeline:     p.TimelineRepo,
+		ghOauthConfig: oauth2.Config{
+			ClientID:     p.Config.GithubClientID,
+			ClientSecret: p.Config.GithubClientSecret,
+			Scopes:       []string{},
+			Endpoint:     github.Endpoint,
+		},
+		repo:     db.NewRepo(p.DB),
+		tempCli:  p.TemporalCli,
+		feedRepo: p.FeedRepo,
+		timeline: p.TimelineRepo,
 	}
 
 	r.Use(serverutil.AccessLogMiddleware) // Log everything

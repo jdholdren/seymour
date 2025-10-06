@@ -20,6 +20,7 @@ require (
 	go.temporal.io/sdk v1.34.0
 	go.uber.org/fx v1.23.0
 	golang.org/x/crypto/x509roots/fallback v0.0.0-20250515174705-ebc8e4631531
+	golang.org/x/oauth2 v0.22.0
 	modernc.org/sqlite v1.18.1
 )
 

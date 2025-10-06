@@ -1,3 +1,6 @@
+// Package logger provides something closer to zerolog's context-based logging.
+//
+// The allows the logger to carry attributes across the context for the duration of the request.
 package logger
 
 import (

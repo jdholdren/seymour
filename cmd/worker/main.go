@@ -12,6 +12,7 @@ import (
 	"github.com/sethvargo/go-envconfig"
 	"github.com/sethvargo/go-retry"
 	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/worker"
 	"go.uber.org/fx"
 	_ "golang.org/x/crypto/x509roots/fallback"
 	_ "modernc.org/sqlite"
@@ -19,7 +20,7 @@ import (
 	"github.com/jdholdren/seymour/internal/logger"
 	"github.com/jdholdren/seymour/internal/seymour"
 	seyqlite "github.com/jdholdren/seymour/internal/sqlite"
-	"github.com/jdholdren/seymour/internal/worker"
+	seyworker "github.com/jdholdren/seymour/internal/worker"
 )
 
 type config struct {
@@ -74,13 +75,15 @@ func main() {
 			fx.Annotate(repo, fx.As(new(seymour.FeedService))),
 			fx.Annotate(repo, fx.As(new(seymour.TimelineService))),
 		),
+		fx.Provide(seyworker.NewWorker),
 		fx.Invoke(func(
 			ctx context.Context,
 			a seymour.FeedService,
 			c client.Client,
 			t seymour.TimelineService,
+			w worker.Worker,
 		) {
-			worker.RunWorker(ctx, a, t, c)
-		}), // Start the worker
+			// Start the worker
+		}),
 	).Run()
 }
