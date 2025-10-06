@@ -26,7 +26,7 @@ func NewWorker(lc fx.Lifecycle, feedService seymour.FeedService, tlService seymo
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			if err := registerEverything(ctx, w, a, cli); err != nil {
-				return fmt.Errorf("error registering workflows and activities: %s", err)
+				return fmt.Errorf("error registering workflows and activities: %T, %v", err, err)
 			}
 
 			// Run the worker in a long-lived goroutine
@@ -65,19 +65,24 @@ func registerEverything(ctx context.Context, w worker.Worker, a activities, cli 
 
 	// Schedules:
 	// Sync RSS feeds
-	handle, err := cli.ScheduleClient().Create(ctx, client.ScheduleOptions{
-		ID: "sync_all",
-		Spec: client.ScheduleSpec{
-			Intervals: []client.ScheduleIntervalSpec{{Every: 15 * time.Minute}},
-		},
-		Action: &client.ScheduleWorkflowAction{
-			ID:        "sync_all",
-			Workflow:  wfs.SyncAll,
-			TaskQueue: TaskQueue,
-		},
-	})
-	if err != nil {
-		return err
+	var err error
+	handle := cli.ScheduleClient().GetHandle(ctx, "sync_all")
+	if handle == nil {
+		handle, err = cli.ScheduleClient().Create(ctx, client.ScheduleOptions{
+			ID: "sync_all",
+			Spec: client.ScheduleSpec{
+				Intervals: []client.ScheduleIntervalSpec{{Every: 15 * time.Minute}},
+			},
+			Action: &client.ScheduleWorkflowAction{
+				ID:        "sync_all",
+				Workflow:  wfs.SyncAll,
+				TaskQueue: TaskQueue,
+			},
+			TriggerImmediately: true,
+		})
+		if err != nil {
+			return err
+		}
 	}
 	handle.Update(ctx, client.ScheduleUpdateOptions{
 		DoUpdate: func(input client.ScheduleUpdateInput) (*client.ScheduleUpdate, error) {
@@ -87,19 +92,22 @@ func registerEverything(ctx context.Context, w worker.Worker, a activities, cli 
 		},
 	})
 	// Refresh timelines
-	handle, err = cli.ScheduleClient().Create(ctx, client.ScheduleOptions{
-		ID: "refresh_timelines",
-		Spec: client.ScheduleSpec{
-			Intervals: []client.ScheduleIntervalSpec{{Every: 15 * time.Minute}},
-		},
-		Action: &client.ScheduleWorkflowAction{
-			ID:        "refresh_timelines",
-			Workflow:  wfs.RefreshTimelines,
-			TaskQueue: TaskQueue,
-		},
-	})
-	if err != nil {
-		return err
+	handle = cli.ScheduleClient().GetHandle(ctx, "refresh_timelines")
+	if handle == nil {
+		handle, err = cli.ScheduleClient().Create(ctx, client.ScheduleOptions{
+			ID: "refresh_timelines",
+			Spec: client.ScheduleSpec{
+				Intervals: []client.ScheduleIntervalSpec{{Every: 15 * time.Minute}},
+			},
+			Action: &client.ScheduleWorkflowAction{
+				ID:        "refresh_timelines",
+				Workflow:  wfs.RefreshTimelines,
+				TaskQueue: TaskQueue,
+			},
+		})
+		if err != nil {
+			return err
+		}
 	}
 	handle.Update(ctx, client.ScheduleUpdateOptions{
 		DoUpdate: func(input client.ScheduleUpdateInput) (*client.ScheduleUpdate, error) {
