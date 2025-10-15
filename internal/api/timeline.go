@@ -2,10 +2,15 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
+	readability "github.com/go-shiori/go-readability"
 	"github.com/gorilla/mux"
+	"github.com/sym01/htmlsanitizer"
+
 	seyerrs "github.com/jdholdren/seymour/internal/errors"
 	"github.com/jdholdren/seymour/internal/serverutil"
 	"github.com/jdholdren/seymour/internal/seymour"
@@ -151,9 +156,11 @@ type TimelineResp struct {
 }
 
 type TimelineEntry struct {
+	EntryID     string `json:"entry_id"`
 	FeedName    string `json:"feed_name"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
+	URL         string `json:"url"`
 }
 
 // TODO: Take in query params for cursor pagination
@@ -207,10 +214,79 @@ func (s Server) getUserTimeline(w http.ResponseWriter, r *http.Request) error {
 	for _, ent := range feedEnts {
 		feed := feedByID[ent.FeedID]
 		resp.Items = append(resp.Items, TimelineEntry{
+			EntryID:     ent.ID,
 			FeedName:    *feed.Title,
 			Title:       ent.Title,
 			Description: ent.Description,
+			URL:         ent.GUID,
 		})
 	}
 	return serverutil.WriteJSON(w, http.StatusOK, resp)
+}
+
+type FeedEntryResp struct {
+	ID            string    `json:"id"`
+	FeedID        string    `json:"feed_id"`
+	GUID          string    `json:"guid"`
+	Title         string    `json:"title"`
+	Description   string    `json:"description"`
+	CreatedAt     time.Time `json:"created_at"`
+	ReaderContent string    `json:"reader_content"`
+}
+
+func (s Server) getFeedEntry(w http.ResponseWriter, r *http.Request) error {
+	var (
+		ctx         = r.Context()
+		feedEntryID = mux.Vars(r)["feedEntryID"]
+	)
+
+	entry, err := s.feedRepo.Entry(ctx, feedEntryID)
+	if err != nil {
+		return err
+	}
+
+	// Cache results for less processing and prevent refetches
+	if resp, ok := s.entryRespCache.Get(feedEntryID); ok {
+		return serverutil.WriteJSON(w, http.StatusOK, resp)
+	}
+
+	// TODO: Ensure this at sync time in the workflow
+	u, err := url.Parse(entry.GUID)
+	if err != nil {
+		return fmt.Errorf("error with the feed entry's url: %s", err)
+	}
+
+	// Fetch the actual site
+	resp, err := s.fetchClient.Get(entry.GUID)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Strip it for readability and sanitize
+	parser := readability.NewParser()
+	article, err := parser.Parse(resp.Body, u)
+	if err != nil {
+		return err
+	}
+
+	santizer := htmlsanitizer.NewHTMLSanitizer()
+	contents, err := santizer.SanitizeString(article.Content)
+	if err != nil {
+		return err
+	}
+
+	ret := FeedEntryResp{
+		ID:            entry.ID,
+		FeedID:        entry.FeedID,
+		GUID:          entry.GUID,
+		Title:         entry.Title,
+		Description:   entry.Description,
+		CreatedAt:     entry.CreatedAt,
+		ReaderContent: contents,
+	}
+	// Add to the cache for next time
+	s.entryRespCache.Add(entry.ID, ret)
+
+	return serverutil.WriteJSON(w, http.StatusOK, ret)
 }

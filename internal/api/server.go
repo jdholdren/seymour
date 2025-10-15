@@ -10,6 +10,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/securecookie"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/jmoiron/sqlx"
 	"go.temporal.io/sdk/client"
 	"go.uber.org/fx"
@@ -26,6 +27,9 @@ type (
 	// to search feeds or add new ones for ingestion.
 	Server struct {
 		*http.Server
+
+		fetchClient    *http.Client
+		entryRespCache *lru.Cache[string, FeedEntryResp]
 
 		repo     db.Repo
 		tempCli  client.Client
@@ -61,6 +65,9 @@ type (
 
 func NewServer(lc fx.Lifecycle, p Params) Server {
 	r := serverutil.ErrRouter{Router: mux.NewRouter()}
+
+	cache, _ := lru.New[string, FeedEntryResp](1024)
+
 	srvr := Server{
 		Server: &http.Server{
 			Addr:         fmt.Sprintf(":%d", p.Config.Port),
@@ -68,8 +75,12 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 			WriteTimeout: 5 * time.Second,
 			Handler:      r,
 		},
-		secureCookie: securecookie.New(p.Config.CookieHashKey, p.Config.CookieBlockKey),
-		httpsCookies: p.Config.HttpsCookies,
+		fetchClient: &http.Client{
+			Timeout: 2 * time.Second,
+		},
+		entryRespCache: cache,
+		secureCookie:   securecookie.New(p.Config.CookieHashKey, p.Config.CookieBlockKey),
+		httpsCookies:   p.Config.HttpsCookies,
 		ghOauthConfig: oauth2.Config{
 			ClientID:     p.Config.GithubClientID,
 			ClientSecret: p.Config.GithubClientSecret,
@@ -104,6 +115,9 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 
 	// Timeline view
 	authed.HandleFuncE("/api/users/{userID}/timeline", srvr.getUserTimeline).Methods(http.MethodGet)
+
+	// Reader view
+	authed.HandleFuncE("/api/feed-entries/{feedEntryID}", srvr.getFeedEntry).Methods(http.MethodGet)
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
