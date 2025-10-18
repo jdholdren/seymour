@@ -202,23 +202,32 @@ func (s Server) getUserTimeline(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	// Turn into a map for fast lookup
-	feedByID := make(map[string]seymour.Feed)
+
+	// Turn into a maps for fast lookup
+	var (
+		feedByID        = make(map[string]seymour.Feed)
+		feedEntriesByID = make(map[string]seymour.FeedEntry)
+	)
 	for _, feed := range feeds {
 		feedByID[feed.ID] = feed
+	}
+	for _, feedEntry := range feedEnts {
+		feedEntriesByID[feedEntry.ID] = feedEntry
 	}
 
 	resp := TimelineResp{
 		Items: make([]TimelineEntry, 0, len(tlEnts)),
 	}
-	for _, ent := range feedEnts {
-		feed := feedByID[ent.FeedID]
+	for _, tlEntry := range tlEnts {
+		feedEntry := feedEntriesByID[tlEntry.FeedEntryID]
+		feed := feedByID[feedEntry.FeedID]
+
 		resp.Items = append(resp.Items, TimelineEntry{
-			EntryID:     ent.ID,
+			EntryID:     feedEntry.ID,
 			FeedName:    *feed.Title,
-			Title:       ent.Title,
-			Description: ent.Description,
-			URL:         ent.GUID,
+			Title:       feedEntry.Title,
+			Description: feedEntry.Description,
+			URL:         feedEntry.GUID,
 		})
 	}
 	return serverutil.WriteJSON(w, http.StatusOK, resp)

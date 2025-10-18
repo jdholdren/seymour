@@ -32,12 +32,13 @@ type (
 
 	// FeedEntry represents a unique entry in an RSS feed.
 	FeedEntry struct {
-		ID          string    `db:"id"`
-		FeedID      string    `db:"feed_id"`
-		GUID        string    `db:"guid"`
-		Title       string    `db:"title"`
-		Description string    `db:"description"`
-		CreatedAt   time.Time `db:"created_at"`
+		ID          string     `db:"id"`
+		FeedID      string     `db:"feed_id"`
+		GUID        string     `db:"guid"`
+		Title       string     `db:"title"`
+		Description string     `db:"description"`
+		CreatedAt   time.Time  `db:"created_at"`
+		PublishTime *time.Time `db:"publish_time"`
 	}
 
 	// Holds the optional fields for updating a feed.

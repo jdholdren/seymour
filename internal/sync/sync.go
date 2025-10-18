@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"html"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/jdholdren/seymour/internal/seymour"
 	"github.com/microcosm-cc/bluemonday"
+	"github.com/sym01/htmlsanitizer"
 )
 
 // Represents a response from an RSS feed fetch.
@@ -74,8 +76,23 @@ var stripPolicy = bluemonday.StrictPolicy()
 //
 // Also limits the length of the string so there's not a massive chunk of text being output.
 func sanitize(s string) string {
+	sanitizer := htmlsanitizer.NewHTMLSanitizer()
+	sanitizer.AllowList = nil // Remove anything HTML
+
+	// Remove any extra HTML
+	s, err := sanitizer.SanitizeString(s)
+	if err != nil {
+		return ""
+	}
+
+	// Unescape any HTML codes into the real thing for display
+	s = html.UnescapeString(s)
+
+	// Remove whitespace and newlines
 	s = strings.TrimSpace(s)
-	s = stripPolicy.Sanitize(s)
+	s = strings.ReplaceAll(s, "\n", " ")
+
+	// Keep the length under 2048: some feeds put the whole post in there.
 	if len(s) > 2048 {
 		s = s[:2048]
 	}
