@@ -236,7 +236,7 @@ func (s Server) getUserTimeline(w http.ResponseWriter, r *http.Request) error {
 type FeedEntryResp struct {
 	ID            string    `json:"id"`
 	FeedID        string    `json:"feed_id"`
-	GUID          string    `json:"guid"`
+	URL           string    `json:"url"`
 	Title         string    `json:"title"`
 	Description   string    `json:"description"`
 	CreatedAt     time.Time `json:"created_at"`
@@ -288,7 +288,7 @@ func (s Server) getFeedEntry(w http.ResponseWriter, r *http.Request) error {
 	ret := FeedEntryResp{
 		ID:            entry.ID,
 		FeedID:        entry.FeedID,
-		GUID:          entry.GUID,
+		URL:           entry.GUID,
 		Title:         entry.Title,
 		Description:   entry.Description,
 		CreatedAt:     entry.CreatedAt,
