@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/securecookie"
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -48,6 +49,7 @@ type (
 		HttpsCookies       bool
 		GithubClientID     string
 		GithubClientSecret string
+		CorsHeader         string
 
 		DebugEndpoints bool
 	}
@@ -64,16 +66,19 @@ type (
 )
 
 func NewServer(lc fx.Lifecycle, p Params) Server {
-	r := serverutil.ErrRouter{Router: mux.NewRouter()}
-
-	cache, _ := lru.New[string, FeedEntryResp](1024)
+	var (
+		r        = serverutil.ErrRouter{Router: mux.NewRouter()}
+		cache, _ = lru.New[string, FeedEntryResp](1024)
+	)
 
 	srvr := Server{
 		Server: &http.Server{
 			Addr:         fmt.Sprintf(":%d", p.Config.Port),
 			ReadTimeout:  5 * time.Second,
 			WriteTimeout: 5 * time.Second,
-			Handler:      r,
+			Handler: handlers.CORS(
+				handlers.AllowedOrigins([]string{p.Config.CorsHeader}),
+			)(r),
 		},
 		fetchClient: &http.Client{
 			Timeout: 2 * time.Second,
@@ -136,13 +141,24 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 }
 
 // Viewer is the structured data about the current user in the frontend.
-type Viewer struct {
-	UserID    string    `json:"user_id"`
-	Email     string    `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
-}
+type (
+	Viewer struct {
+		UserID    string    `json:"user_id"`
+		Email     string    `json:"email"`
+		CreatedAt time.Time `json:"created_at"`
+
+		// Information about the user's nav bar
+		PersonalSubscriptions []ViewerSubscription `json:"viewer_subscriptions"`
+	}
+
+	ViewerSubscription struct {
+		Name   string `json:"name"`
+		FeedID string `json:"feed_id"`
+	}
+)
 
 func (s Server) handleViewer(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
 	sess := session(r, s.secureCookie)
 	if sess.UserID == "" {
 		return serverutil.WriteJSON(w, http.StatusOK, struct{}{})
@@ -155,9 +171,45 @@ func (s Server) handleViewer(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
+	// Get the feeds that the user has subscribed to.
+	// This will populate the nav bar with the individual filters for their personal timeline.
+	subs, err := s.timeline.UserSubscriptions(ctx, usr.ID)
+	if err != nil {
+		return err
+	}
+
+	// Get the feed names themselves.
+	var feedIDs []string
+	for _, sub := range subs {
+		feedIDs = append(feedIDs, sub.FeedID)
+	}
+	feeds, err := s.feedRepo.Feeds(ctx, feedIDs)
+	if err != nil {
+		return err
+	}
+	feedsByID := make(map[string]seymour.Feed)
+	for _, feed := range feeds {
+		feedsByID[feed.ID] = feed
+	}
+
+	var viewerSubs []ViewerSubscription
+	for _, feed := range feeds {
+		feed := feedsByID[feed.ID]
+		var title string
+		if feed.Title != nil {
+			title = *feed.Title
+		}
+
+		viewerSubs = append(viewerSubs, ViewerSubscription{
+			Name:   title,
+			FeedID: feed.ID,
+		})
+	}
+
 	return serverutil.WriteJSON(w, http.StatusOK, Viewer{
-		UserID:    usr.ID,
-		Email:     usr.Email,
-		CreatedAt: usr.CreatedAt,
+		UserID:                usr.ID,
+		Email:                 usr.Email,
+		CreatedAt:             usr.CreatedAt,
+		PersonalSubscriptions: viewerSubs,
 	})
 }
