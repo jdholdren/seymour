@@ -37,9 +37,10 @@ type (
 		feedRepo seymour.FeedService
 		timeline seymour.TimelineService
 
-		ghOauthConfig oauth2.Config
-		secureCookie  *securecookie.SecureCookie
-		httpsCookies  bool // Whether or not HTTPS should be used for cookies
+		ghOauthConfig  oauth2.Config
+		secureCookie   *securecookie.SecureCookie
+		httpsCookies   bool   // Whether or not HTTPS should be used for cookies
+		ssoRedirectURL string // URL to redirect to after successful SSO login
 	}
 
 	ServerConfig struct {
@@ -50,6 +51,7 @@ type (
 		GithubClientID     string
 		GithubClientSecret string
 		CorsHeader         string
+		SSORedirectURL     string
 
 		DebugEndpoints bool
 	}
@@ -78,6 +80,7 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 			WriteTimeout: 5 * time.Second,
 			Handler: handlers.CORS(
 				handlers.AllowedOrigins([]string{p.Config.CorsHeader}),
+				handlers.AllowCredentials(),
 			)(r),
 		},
 		fetchClient: &http.Client{
@@ -86,6 +89,7 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 		entryRespCache: cache,
 		secureCookie:   securecookie.New(p.Config.CookieHashKey, p.Config.CookieBlockKey),
 		httpsCookies:   p.Config.HttpsCookies,
+		ssoRedirectURL: p.Config.SSORedirectURL,
 		ghOauthConfig: oauth2.Config{
 			ClientID:     p.Config.GithubClientID,
 			ClientSecret: p.Config.GithubClientSecret,

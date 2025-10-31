@@ -146,7 +146,12 @@ func (s Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) error 
 	}
 	setSession(w, s.secureCookie, s.httpsCookies, session)
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	// Use the configured redirect URL, defaulting to "/" if not set
+	redirectURL := s.ssoRedirectURL
+	if redirectURL == "" {
+		redirectURL = "/"
+	}
+	http.Redirect(w, r, redirectURL, http.StatusFound)
 	return nil
 }
 

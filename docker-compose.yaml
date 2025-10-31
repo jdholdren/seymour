@@ -28,6 +28,7 @@ services:
       - HTTPS_COOKIES=false
       - DEBUG_ENDPOINTS=true
       - CORS=http://localhost:3000
+      - SSO_REDIRECT_URL=http://localhost:3000/
     volumes:
       - ./data/citadel/citadel.sqlite:/data/citadel.sqlite
     depends_on:

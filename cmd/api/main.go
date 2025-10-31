@@ -35,6 +35,7 @@ type config struct {
 	CookieBlockKey     string `env:"COOKIE_BLOCK_KEY"`
 	DebugEndpoints     bool   `env:"DEBUG_ENDPOINTS, default=false"`
 	Cors               string `env:"CORS"`
+	SSORedirectURL     string `env:"SSO_REDIRECT_URL"`
 }
 
 func main() {
@@ -92,6 +93,7 @@ func main() {
 				HttpsCookies:       cfg.HTTPSCookies,
 				DebugEndpoints:     cfg.DebugEndpoints,
 				CorsHeader:         cfg.Cors,
+				SSORedirectURL:     cfg.SSORedirectURL,
 			},
 			dbx,
 			fx.Annotate(ctx, fx.As(new(context.Context))),
