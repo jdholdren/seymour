@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -77,9 +78,12 @@ func (s Server) postSusbcriptions(w http.ResponseWriter, r *http.Request) error 
 
 	// Start the workflow to create it and verify it
 	feedID, err := worker.TriggerCreateFeedWorkflow(ctx, s.tempCli, body.FeedURL)
+	var seyErr *seyerrs.Error
+	if errors.As(err, &seyErr) {
+		return seyErr
+	}
 	if err != nil {
-		// TODO: Other errors should be possible here, like a sync going bad due to a bad url
-		return seyerrs.E(err, http.StatusInternalServerError)
+		return err
 	}
 	feed, err := s.feedRepo.Feed(ctx, feedID)
 	if err != nil {

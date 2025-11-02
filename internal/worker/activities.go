@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
+	"net/http"
 	"time"
 
+	seyerrs "github.com/jdholdren/seymour/internal/errors"
 	"github.com/jdholdren/seymour/internal/seymour"
 	"github.com/jdholdren/seymour/internal/sync"
 	"go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/temporal"
 )
 
 type activities struct {
@@ -49,7 +51,7 @@ func (a activities) SyncFeed(ctx context.Context, feedID string) error {
 
 	feed, entries, err := sync.Feed(ctx, feed.ID, feed.URL)
 	if err != nil {
-		return err
+		return temporal.NewApplicationError("error syncing feed", "seyerr", seyerrs.E(err, http.StatusBadRequest))
 	}
 
 	if err := a.feedService.UpdateFeed(ctx, feed.ID, seymour.UpdateFeedArgs{
@@ -80,8 +82,6 @@ func (a activities) CreateFeed(ctx context.Context, feedURL string) (string, err
 	if err != nil {
 		return "", fmt.Errorf("error inserting feed: %w", err)
 	}
-
-	slog.Debug("inserted feed", "feedID", feed.ID)
 
 	return feed.ID, nil
 }

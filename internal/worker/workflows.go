@@ -113,7 +113,6 @@ func (workflows) CreateFeed(ctx workflow.Context, feedURL string) (string, error
 	var feed seymour.Feed
 	if err := workflow.ExecuteActivity(ctx, acts.Feed, feedID).Get(ctx, &feed); err != nil {
 		l.Error("failed to fetch feed", "error", err)
-		return "", err
 	}
 	if feed.LastSyncedAt != nil { // Exit early
 		l.Info("feed already synced", "feed_id", feedID)

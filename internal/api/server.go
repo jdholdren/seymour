@@ -81,6 +81,8 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 			Handler: handlers.CORS(
 				handlers.AllowedOrigins([]string{p.Config.CorsHeader}),
 				handlers.AllowCredentials(),
+				handlers.AllowedMethods([]string{http.MethodGet, http.MethodPost, http.MethodOptions}),
+				handlers.AllowedHeaders([]string{"content-type"}),
 			)(r),
 		},
 		fetchClient: &http.Client{
