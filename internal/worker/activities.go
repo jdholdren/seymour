@@ -54,7 +54,7 @@ func (a activities) SyncFeed(ctx context.Context, feedID string) error {
 
 	if err := a.feedService.UpdateFeed(ctx, feed.ID, seymour.UpdateFeedArgs{
 		Title:       *feed.Title,
-		Description: *feed.Title,
+		Description: *feed.Description,
 		LastSynced:  time.Now(),
 	}); err != nil {
 		return err
@@ -114,6 +114,7 @@ func (a activities) InsertMissingTimelineEntries(ctx context.Context) ([]string,
 			UserID:      m.UserID,
 			FeedEntryID: m.FeedEntryID,
 			Status:      seymour.TimelineEntryStatusRequiresJudgement,
+			FeedID:      m.FeedID,
 		}); err != nil {
 			return nil, fmt.Errorf("error inserting timeline entry: %w", err)
 		}

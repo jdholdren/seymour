@@ -169,6 +169,7 @@ func (s Server) getUserTimeline(w http.ResponseWriter, r *http.Request) error {
 		ctx     = r.Context()
 		session = session(r, s.secureCookie)
 		userID  = mux.Vars(r)["userID"]
+		feedID  = r.URL.Query().Get("feed_id")
 	)
 
 	// Only let the current user see their own timeline
@@ -178,6 +179,7 @@ func (s Server) getUserTimeline(w http.ResponseWriter, r *http.Request) error {
 
 	tlEnts, err := s.timeline.UserTimelineEntries(ctx, userID, seymour.UserTimelineEntriesArgs{
 		Status: seymour.TimelineEntryStatusApproved,
+		FeedID: feedID,
 	})
 	if err != nil {
 		return err

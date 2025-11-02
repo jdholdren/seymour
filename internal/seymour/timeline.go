@@ -30,6 +30,7 @@ type (
 		UserID      string    `db:"user_id"`
 		FeedEntryID string    `db:"feed_entry_id"`
 		CreatedAt   time.Time `db:"created_at"`
+		FeedID      string    `db:"feed_id"`
 
 		// For curation: if the entry has been approved or not by the AI
 		Status TimelineEntryStatus `db:"status"`
@@ -38,11 +39,13 @@ type (
 	// MissingEntry is an instance where a user should have gotten the feed entry put into their timeline.
 	MissingEntry struct {
 		FeedEntryID string `db:"feed_entry_id"`
+		FeedID      string `db:"feed_id"`
 		UserID      string `db:"user_id"`
 	}
 
 	UserTimelineEntriesArgs struct {
 		Status TimelineEntryStatus // To optionally filter by status
+		FeedID string              // To optionally filter by feed
 		Limit  uint64              // To optionally limit the number of entries returned
 	}
 )

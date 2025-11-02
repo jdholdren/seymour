@@ -152,12 +152,13 @@ type (
 		CreatedAt time.Time `json:"created_at"`
 
 		// Information about the user's nav bar
-		PersonalSubscriptions []ViewerSubscription `json:"viewer_subscriptions"`
+		PersonalSubscriptions map[string]ViewerSubscription `json:"subscriptions"`
 	}
 
 	ViewerSubscription struct {
-		Name   string `json:"name"`
-		FeedID string `json:"feed_id"`
+		Name        string `json:"name"`
+		FeedID      string `json:"feed_id"`
+		Description string `json:"description"`
 	}
 )
 
@@ -196,18 +197,22 @@ func (s Server) handleViewer(w http.ResponseWriter, r *http.Request) error {
 		feedsByID[feed.ID] = feed
 	}
 
-	var viewerSubs []ViewerSubscription
+	viewerSubs := make(map[string]ViewerSubscription)
 	for _, feed := range feeds {
 		feed := feedsByID[feed.ID]
-		var title string
+		var title, desc string
 		if feed.Title != nil {
 			title = *feed.Title
 		}
+		if feed.Description != nil {
+			desc = *feed.Description
+		}
 
-		viewerSubs = append(viewerSubs, ViewerSubscription{
-			Name:   title,
-			FeedID: feed.ID,
-		})
+		viewerSubs[feed.ID] = ViewerSubscription{
+			Name:        title,
+			FeedID:      feed.ID,
+			Description: desc,
+		}
 	}
 
 	return serverutil.WriteJSON(w, http.StatusOK, Viewer{

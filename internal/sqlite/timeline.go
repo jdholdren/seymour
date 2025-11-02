@@ -54,6 +54,7 @@ func (r Repo) UserSubscription(ctx context.Context, userID string, feedID string
 func (r Repo) MissingEntries(ctx context.Context) ([]seymour.MissingEntry, error) {
 	const q = `
 	SELECT
+		fe.feed_id AS feed_id,
 		fe.id AS feed_entry_id,
 		subs.user_id
 	FROM
@@ -78,8 +79,10 @@ func (r Repo) InsertEntry(ctx context.Context, entry seymour.TimelineEntry) erro
 		id,
 		user_id,
 		feed_entry_id,
-		status
+		status,
+		feed_id
 	) VALUES (
+		?,
 		?,
 		?,
 		?,
@@ -87,8 +90,10 @@ func (r Repo) InsertEntry(ctx context.Context, entry seymour.TimelineEntry) erro
 	);
 	`
 
+	fmt.Printf("%#v\n", entry)
+
 	entry.ID = fmt.Sprintf("%s-%s", uuid.New().String(), timelineEntryNamespace)
-	if _, err := r.db.ExecContext(ctx, q, entry.ID, entry.UserID, entry.FeedEntryID, entry.Status); err != nil {
+	if _, err := r.db.ExecContext(ctx, q, entry.ID, entry.UserID, entry.FeedEntryID, entry.Status, entry.FeedID); err != nil {
 		return fmt.Errorf("error inserting entry: %s", err)
 	}
 
@@ -136,6 +141,9 @@ func (r Repo) UserTimelineEntries(ctx context.Context, userID string, args seymo
 	}
 	if args.Limit > 0 {
 		q = q.Limit(args.Limit)
+	}
+	if args.FeedID != "" {
+		q = q.Where("feed_id = ?", args.FeedID)
 	}
 	q = q.Where(where)
 
