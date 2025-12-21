@@ -51,7 +51,7 @@ func (r Repo) UserSubscription(ctx context.Context, userID string, feedID string
 	return &sub, nil
 }
 
-func (r Repo) MissingEntries(ctx context.Context) ([]seymour.MissingEntry, error) {
+func (r Repo) MissingEntries(ctx context.Context, userID string) ([]seymour.MissingEntry, error) {
 	const q = `
 	SELECT
 		fe.feed_id AS feed_id,
@@ -63,13 +63,15 @@ func (r Repo) MissingEntries(ctx context.Context) ([]seymour.MissingEntry, error
 		INNER JOIN subscriptions subs ON subs.feed_id = feeds.id
 		INNER JOIN users ON users.id = subs.user_id
 		LEFT JOIN timeline_entries ts ON ts.feed_entry_id = fe.id
-		WHERE ts.feed_entry_id IS NULL;
+		WHERE subs.user_id = ? AND ts.feed_entry_id IS NULL ;
 	`
 
 	var missingEntries []seymour.MissingEntry
-	if err := r.db.SelectContext(ctx, &missingEntries, q); err != nil {
+	if err := r.db.SelectContext(ctx, &missingEntries, q, userID); err != nil {
 		return nil, fmt.Errorf("error selecting missing entries: %s", err)
 	}
+
+	fmt.Println(missingEntries)
 
 	return missingEntries, nil
 }
@@ -89,8 +91,6 @@ func (r Repo) InsertEntry(ctx context.Context, entry seymour.TimelineEntry) erro
 		?
 	);
 	`
-
-	fmt.Printf("%#v\n", entry)
 
 	entry.ID = fmt.Sprintf("%s-%s", uuid.New().String(), timelineEntryNamespace)
 	if _, err := r.db.ExecContext(ctx, q, entry.ID, entry.UserID, entry.FeedEntryID, entry.Status, entry.FeedID); err != nil {
@@ -145,6 +145,7 @@ func (r Repo) UserTimelineEntries(ctx context.Context, userID string, args seymo
 	if args.FeedID != "" {
 		q = q.Where("feed_id = ?", args.FeedID)
 	}
+
 	q = q.Where(where)
 
 	query, queryArgs, err := q.ToSql()

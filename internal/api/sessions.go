@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/securecookie"
-	"github.com/jdholdren/seymour/internal/api/db"
+	"github.com/jdholdren/seymour/internal/seymour"
 )
 
 const sessionCookieName = "citadel_session"
@@ -131,7 +131,7 @@ func (s Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) error 
 	}
 
 	// Ensure the user
-	usr, err := s.repo.EnsureUser(r.Context(), db.User{
+	usr, err := s.userRepo.EnsureUser(r.Context(), seymour.User{
 		GithubID: info.Username,
 		Email:    info.NotificationEmail,
 	})

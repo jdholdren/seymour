@@ -12,7 +12,8 @@ type (
 		FeedByURL(ctx context.Context, url string) (Feed, error)
 		InsertFeed(ctx context.Context, url string) (Feed, error)
 		DeleteFeed(ctx context.Context, id string) error
-		AllFeeds(ctx context.Context) ([]Feed, error)
+		CountAllFeeds(ctx context.Context) (int, error)
+		FeedIDs(ctx context.Context, offset, pageSize int) ([]string, error)
 		Entry(ctx context.Context, id string) (FeedEntry, error)
 		Entries(ctx context.Context, ids []string) ([]FeedEntry, error)
 		InsertEntries(ctx context.Context, entries []FeedEntry) error
@@ -39,6 +40,7 @@ type (
 		Description string     `db:"description"`
 		CreatedAt   time.Time  `db:"created_at"`
 		PublishTime *time.Time `db:"publish_time"`
+		Link        string     `db:"link"`
 	}
 
 	// Holds the optional fields for updating a feed.

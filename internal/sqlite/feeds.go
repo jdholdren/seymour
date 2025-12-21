@@ -13,7 +13,8 @@ import (
 	"github.com/jdholdren/seymour/internal/seymour"
 )
 
-// Errors defined in the seymour package
+// Usually not a fan of this pattern, but it's basically required since fx is being used.
+var _ seymour.FeedService = (*Repo)(nil)
 
 const (
 	feedNamespace  = "-fd"
@@ -106,6 +107,30 @@ func (r Repo) AllFeeds(ctx context.Context) ([]seymour.Feed, error) {
 	return feeds, nil
 }
 
+// CountAllFeeds returns the total number of feeds in the database.
+func (r Repo) CountAllFeeds(ctx context.Context) (int, error) {
+	const q = "SELECT COUNT(*) FROM feeds;"
+
+	var count int
+	if err := r.db.GetContext(ctx, &count, q); err != nil {
+		return 0, fmt.Errorf("error counting feeds: %s", err)
+	}
+
+	return count, nil
+}
+
+// FeedIDs returns a paginated list of feed IDs.
+func (r Repo) FeedIDs(ctx context.Context, offset, pageSize int) ([]string, error) {
+	const q = "SELECT id FROM feeds LIMIT ? OFFSET ?;"
+
+	var ids []string
+	if err := r.db.SelectContext(ctx, &ids, q, pageSize, offset); err != nil {
+		return nil, fmt.Errorf("error fetching feed IDs: %s", err)
+	}
+
+	return ids, nil
+}
+
 func (r Repo) Entry(ctx context.Context, id string) (seymour.FeedEntry, error) {
 	const q = `SELECT * FROM feed_entries WHERE id = ?;`
 
@@ -149,8 +174,8 @@ func (r Repo) InsertEntries(ctx context.Context, entries []seymour.FeedEntry) er
 		entries[i].ID = fmt.Sprintf("%s%s", uuid.New().String(), entryNamespace)
 	}
 
-	const q = `INSERT INTO feed_entries (id, feed_id, title, description, guid)
-	VALUES (:id, :feed_id, :title, :description, :guid)
+	const q = `INSERT INTO feed_entries (id, feed_id, title, description, guid, link)
+	VALUES (:id, :feed_id, :title, :description, :guid, :link)
 	ON CONFLICT(guid) DO NOTHING;`
 	if _, err := r.db.NamedExecContext(ctx, q, entries); err != nil {
 		return fmt.Errorf("error inserting entries; %s", err)

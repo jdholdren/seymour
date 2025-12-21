@@ -10,7 +10,7 @@ type (
 		CreateSubscription(ctx context.Context, userID string, feedID string) error
 		UserSubscriptions(ctx context.Context, userID string) ([]Subscription, error)
 		// Gets all of the timeline entries that users SHOULD have gotten, but haven't had inserted yet
-		MissingEntries(ctx context.Context) ([]MissingEntry, error)
+		MissingEntries(ctx context.Context, userID string) ([]MissingEntry, error)
 		// Gets a users timeline needing judgement
 		EntriesNeedingJudgement(ctx context.Context, userID string) ([]TimelineEntry, error)
 		InsertEntry(ctx context.Context, entry TimelineEntry) error

@@ -15,10 +15,11 @@ import (
 const TaskQueue = "shared"
 
 // NewWorker sets up the worker with registration of workflows, activities, and schedules.
-func NewWorker(lc fx.Lifecycle, feedService seymour.FeedService, tlService seymour.TimelineService, cli client.Client) (worker.Worker, error) {
+func NewWorker(lc fx.Lifecycle, feedService seymour.FeedService, tlService seymour.TimelineService, uService seymour.UserService, cli client.Client) (worker.Worker, error) {
 	a := activities{
 		feedService:     feedService,
 		timelineService: tlService,
+		userService:     uService,
 	}
 
 	w := worker.New(cli, TaskQueue, worker.Options{})
@@ -44,30 +45,28 @@ func NewWorker(lc fx.Lifecycle, feedService seymour.FeedService, tlService seymo
 func registerEverything(ctx context.Context, w worker.Worker, a activities, cli client.Client) error {
 	// Workflows
 	wfs := workflows{}
-	w.RegisterWorkflow(wfs.SyncIndividual)
-	w.RegisterWorkflow(wfs.SyncAll)
+	w.RegisterWorkflow(wfs.SyncAllFeeds)
 	w.RegisterWorkflow(wfs.CreateFeed)
-	w.RegisterWorkflow(wfs.RefreshTimelines)
+	w.RegisterWorkflow(wfs.RefreshUserTimeline)
 	w.RegisterWorkflow(wfs.JudgeUserTimeline)
+	w.RegisterWorkflow(wfs.RefreshAllUserTimelines)
 
 	// Activities
 	//
 	// TODO(jdh): Some of these are too granular, make them more action-based and not have so much
 	// schema in there.
 	w.RegisterActivity(a.SyncFeed)
-	w.RegisterActivity(a.AllFeeds)
+	w.RegisterActivity(a.CountAllFeeds)
 	w.RegisterActivity(a.RemoveFeed)
 	w.RegisterActivity(a.CreateFeed)
-	w.RegisterActivity(a.Feed)
 	w.RegisterActivity(a.InsertMissingTimelineEntries)
 	w.RegisterActivity(a.JudgeEntries)
 	w.RegisterActivity(a.MarkEntriesAsJudged)
 
 	// Schedules:
 	// Sync RSS feeds
-	var err error
 	handle := cli.ScheduleClient().GetHandle(ctx, "sync_all")
-	if handle == nil {
+	if _, err := handle.Describe(ctx); err != nil {
 		handle, err = cli.ScheduleClient().Create(ctx, client.ScheduleOptions{
 			ID: "sync_all",
 			Spec: client.ScheduleSpec{
@@ -75,7 +74,7 @@ func registerEverything(ctx context.Context, w worker.Worker, a activities, cli 
 			},
 			Action: &client.ScheduleWorkflowAction{
 				ID:        "sync_all",
-				Workflow:  wfs.SyncAll,
+				Workflow:  wfs.SyncAllFeeds,
 				TaskQueue: TaskQueue,
 			},
 			TriggerImmediately: true,
@@ -93,7 +92,7 @@ func registerEverything(ctx context.Context, w worker.Worker, a activities, cli 
 	})
 	// Refresh timelines
 	handle = cli.ScheduleClient().GetHandle(ctx, "refresh_timelines")
-	if handle == nil {
+	if _, err := handle.Describe(ctx); err != nil {
 		handle, err = cli.ScheduleClient().Create(ctx, client.ScheduleOptions{
 			ID: "refresh_timelines",
 			Spec: client.ScheduleSpec{
@@ -101,7 +100,7 @@ func registerEverything(ctx context.Context, w worker.Worker, a activities, cli 
 			},
 			Action: &client.ScheduleWorkflowAction{
 				ID:        "refresh_timelines",
-				Workflow:  wfs.RefreshTimelines,
+				Workflow:  wfs.RefreshAllUserTimelines, // TODO: Refresh all user timelines
 				TaskQueue: TaskQueue,
 			},
 		})

@@ -17,36 +17,46 @@ import (
 type activities struct {
 	feedService     seymour.FeedService
 	timelineService seymour.TimelineService
+	userService     seymour.UserService
 }
 
 // Instance to make the workflow a bit more readable
 var acts = activities{}
 
-// Fetches all RSS feeds we know about in the system.
-func (a activities) AllFeeds(ctx context.Context) ([]seymour.Feed, error) {
-	feeds, err := a.feedService.AllFeeds(ctx)
+// Count all feeds we know about in the system.
+//
+// Used for batching up the work as the number of feeds grows.
+func (a activities) CountAllFeeds(ctx context.Context) (int, error) {
+	n, err := a.feedService.CountAllFeeds(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	return n, nil
+}
+
+// FeedIDPage fetches a page of feed ids from the DB.
+//
+// Useful for batching work across the global set of feeds.
+func (a activities) FeedIDPage(ctx context.Context, offset, pageSize int) ([]string, error) {
+	ids, err := a.feedService.FeedIDs(ctx, offset, pageSize)
 	if err != nil {
 		return nil, err
 	}
 
-	return feeds, nil
-}
-
-// Fetches a single feed
-func (a activities) Feed(ctx context.Context, feedID string) (seymour.Feed, error) {
-	feed, err := a.feedService.Feed(ctx, feedID)
-	if err != nil {
-		return seymour.Feed{}, err
-	}
-
-	return feed, nil
+	return ids, nil
 }
 
 // Goes to the url and grabs the RSS feed items.
-func (a activities) SyncFeed(ctx context.Context, feedID string) error {
+func (a activities) SyncFeed(ctx context.Context, feedID string, ignoreRecency bool) error {
 	feed, err := a.feedService.Feed(ctx, feedID)
 	if err != nil {
 		return err
+	}
+
+	// If recently synced, exit early, don't repeat work:
+	if !ignoreRecency && feed.LastSyncedAt != nil && time.Since(*feed.LastSyncedAt) < time.Hour {
+		return nil
 	}
 
 	feed, entries, err := sync.Feed(ctx, feed.ID, feed.URL)
@@ -96,19 +106,18 @@ func (a activities) RemoveFeed(ctx context.Context, feedID string) error {
 
 // Inserts timeline entries that should be present in a user's timeline based on subscription but are missing.
 //
-// Returns a list of the affected users.
-func (a activities) InsertMissingTimelineEntries(ctx context.Context) ([]string, error) {
+// Returns number of missing entries inserted.
+func (a activities) InsertMissingTimelineEntries(ctx context.Context, userID string) (int, error) {
 	l := activity.GetLogger(ctx)
 
-	missing, err := a.timelineService.MissingEntries(ctx)
+	missing, err := a.timelineService.MissingEntries(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("error finding missing timeline entries: %s", err)
+		return 0, fmt.Errorf("error finding missing timeline entries: %s", err)
 	}
 
 	l.Info("searched for missing timeline entries", "length", len(missing))
 
 	// Keep track of affected users
-	userIDs := make(map[string]struct{})
 	for _, m := range missing {
 		if err := a.timelineService.InsertEntry(ctx, seymour.TimelineEntry{
 			UserID:      m.UserID,
@@ -116,19 +125,11 @@ func (a activities) InsertMissingTimelineEntries(ctx context.Context) ([]string,
 			Status:      seymour.TimelineEntryStatusRequiresJudgement,
 			FeedID:      m.FeedID,
 		}); err != nil {
-			return nil, fmt.Errorf("error inserting timeline entry: %w", err)
+			return 0, fmt.Errorf("error inserting timeline entry: %w", err)
 		}
-
-		userIDs[m.UserID] = struct{}{}
 	}
 
-	// Turn the map into a slice of strings
-	users := make([]string, 0, len(userIDs))
-	for userID := range userIDs {
-		users = append(users, userID)
-	}
-
-	return users, nil
+	return len(missing), nil
 }
 
 // Type that holds a timeline entry ID and whether it has been approved.
@@ -164,4 +165,8 @@ func (a activities) MarkEntriesAsJudged(ctx context.Context, js judgements) erro
 	}
 
 	return nil
+}
+
+func (a activities) AllUserIDs(ctx context.Context) ([]string, error) {
+	return a.userService.AllUserIDs(ctx)
 }

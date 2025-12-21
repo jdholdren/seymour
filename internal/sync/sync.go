@@ -58,6 +58,7 @@ func Feed(ctx context.Context, feedID, feedURL string) (seymour.Feed, []seymour.
 				GUID:        item.GUID,
 				Title:       sanitize(item.Title),
 				Description: sanitize(item.Description),
+				Link:        item.Link,
 			})
 		}
 	}

@@ -100,6 +100,7 @@ func main() {
 			fx.Annotate(temporalCli, fx.As(new(client.Client))),
 			fx.Annotate(repo, fx.As(new(seymour.FeedService))),
 			fx.Annotate(repo, fx.As(new(seymour.TimelineService))),
+			fx.Annotate(repo, fx.As(new(seymour.UserService))),
 		),
 		api.Module,
 		fx.Invoke(func(api.Server) {}), // Start the BFF server

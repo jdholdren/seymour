@@ -1,0 +1,2 @@
+ALTER TABLE feed_entries
+    ADD COLUMN link VARCHAR(256) NOT NULL;

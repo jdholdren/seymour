@@ -77,7 +77,7 @@ func (s Server) postSusbcriptions(w http.ResponseWriter, r *http.Request) error 
 	}
 
 	// Start the workflow to create it and verify it
-	feedID, err := worker.TriggerCreateFeedWorkflow(ctx, s.tempCli, body.FeedURL)
+	feedID, err := worker.TriggerCreateFeedWorkflow(ctx, s.tempCli, body.FeedURL, sess.UserID)
 	var seyErr *seyerrs.Error
 	if errors.As(err, &seyErr) {
 		return seyErr
@@ -233,7 +233,7 @@ func (s Server) getUserTimeline(w http.ResponseWriter, r *http.Request) error {
 			FeedName:    *feed.Title,
 			Title:       feedEntry.Title,
 			Description: feedEntry.Description,
-			URL:         feedEntry.GUID,
+			URL:         feedEntry.Link,
 		})
 	}
 	return serverutil.WriteJSON(w, http.StatusOK, resp)
@@ -272,7 +272,7 @@ func (s Server) getFeedEntry(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	// Fetch the actual site
-	resp, err := s.fetchClient.Get(entry.GUID)
+	resp, err := s.fetchClient.Get(entry.Link)
 	if err != nil {
 		return err
 	}
@@ -294,7 +294,7 @@ func (s Server) getFeedEntry(w http.ResponseWriter, r *http.Request) error {
 	ret := FeedEntryResp{
 		ID:            entry.ID,
 		FeedID:        entry.FeedID,
-		URL:           entry.GUID,
+		URL:           entry.Link,
 		Title:         entry.Title,
 		Description:   entry.Description,
 		CreatedAt:     entry.CreatedAt,

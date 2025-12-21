@@ -12,13 +12,11 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/securecookie"
 	lru "github.com/hashicorp/golang-lru/v2"
-	"github.com/jmoiron/sqlx"
 	"go.temporal.io/sdk/client"
 	"go.uber.org/fx"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
 
-	"github.com/jdholdren/seymour/internal/api/db"
 	"github.com/jdholdren/seymour/internal/serverutil"
 	"github.com/jdholdren/seymour/internal/seymour"
 )
@@ -32,7 +30,7 @@ type (
 		fetchClient    *http.Client
 		entryRespCache *lru.Cache[string, FeedEntryResp]
 
-		repo     db.Repo
+		userRepo seymour.UserService
 		tempCli  client.Client
 		feedRepo seymour.FeedService
 		timeline seymour.TimelineService
@@ -60,7 +58,7 @@ type (
 		fx.In
 
 		Config       ServerConfig
-		DB           *sqlx.DB
+		UserService  seymour.UserService
 		TemporalCli  client.Client
 		FeedRepo     seymour.FeedService
 		TimelineRepo seymour.TimelineService
@@ -98,7 +96,7 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 			Scopes:       []string{},
 			Endpoint:     github.Endpoint,
 		},
-		repo:     db.NewRepo(p.DB),
+		userRepo: p.UserService,
 		tempCli:  p.TemporalCli,
 		feedRepo: p.FeedRepo,
 		timeline: p.TimelineRepo,
@@ -170,7 +168,7 @@ func (s Server) handleViewer(w http.ResponseWriter, r *http.Request) error {
 	if sess.UserID == "" {
 		return serverutil.WriteJSON(w, http.StatusOK, struct{}{})
 	}
-	usr, err := s.repo.User(r.Context(), sess.UserID)
+	usr, err := s.userRepo.User(r.Context(), sess.UserID)
 	if errors.Is(err, seymour.ErrNotFound) {
 		return serverutil.WriteJSON(w, http.StatusOK, struct{}{})
 	}

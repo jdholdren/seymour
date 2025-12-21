@@ -11,26 +11,11 @@ import (
 	"go.temporal.io/sdk/workflow"
 
 	seyerrs "github.com/jdholdren/seymour/internal/errors"
-	"github.com/jdholdren/seymour/internal/seymour"
 )
 
 type workflows struct{}
 
-func (workflows) SyncIndividual(ctx workflow.Context, feedID string) error {
-	options := workflow.ActivityOptions{
-		StartToCloseTimeout: 10 * time.Second,
-		RetryPolicy: &temporal.RetryPolicy{
-			InitialInterval:    time.Second,
-			BackoffCoefficient: 2.0,
-			MaximumAttempts:    3, // 0 is unlimited retries
-		},
-	}
-	ctx = workflow.WithActivityOptions(ctx, options)
-
-	return workflow.ExecuteActivity(ctx, acts.SyncFeed, feedID).Get(ctx, nil)
-}
-
-func (workflows) SyncAll(ctx workflow.Context) error {
+func (workflows) SyncAllFeeds(ctx workflow.Context) error {
 	options := workflow.ActivityOptions{
 		StartToCloseTimeout: 3 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -42,34 +27,49 @@ func (workflows) SyncAll(ctx workflow.Context) error {
 	ctx = workflow.WithActivityOptions(ctx, options)
 	l := workflow.GetLogger(ctx)
 
-	var feeds []seymour.Feed
-	if err := workflow.ExecuteActivity(ctx, acts.AllFeeds).Get(ctx, &feeds); err != nil {
+	var allFeedCount int
+	if err := workflow.ExecuteActivity(ctx, acts.CountAllFeeds).Get(ctx, &allFeedCount); err != nil {
 		l.Error("failed to sync all feeds", "error", err)
 		return err
 	}
 
-	wg := workflow.NewWaitGroup(ctx)
-	wg.Add(len(feeds))
-	for _, feed := range feeds {
-		workflow.Go(ctx, func(ctx workflow.Context) {
-			defer wg.Done()
+	// Batch each one into a group to sync
+	batches := allFeedCount / 50
+	if batches*50 < allFeedCount {
+		batches += 1
+	}
 
-			if err := workflow.ExecuteActivity(ctx, acts.SyncFeed, feed.ID).Get(ctx, nil); err != nil {
-				l.Error("failed to sync feed", "feed_id", feed.ID, "error", err)
-			}
-		})
+	wg := workflow.NewWaitGroup(ctx)
+	wg.Add(batches)
+	for i := range batches {
+		// Get a page of feed ID's
+		var ids []string
+		if err := workflow.ExecuteActivity(ctx, acts.FeedIDPage, i*50, 50).Get(ctx, &ids); err != nil {
+			l.Error("failed to get feed IDs", "error", err)
+			return err
+		}
+
+		for _, id := range ids {
+			workflow.Go(ctx, func(ctx workflow.Context) {
+				defer wg.Done()
+
+				if err := workflow.ExecuteActivity(ctx, acts.SyncFeed, id).Get(ctx, nil); err != nil {
+					l.Error("failed to sync feed", "feed_id", id, "error", err)
+				}
+			})
+		}
+
 	}
 
 	wg.Wait(ctx)
-
 	return nil
 }
 
-func TriggerCreateFeedWorkflow(ctx context.Context, c client.Client, feedURL string) (string, error) {
+func TriggerCreateFeedWorkflow(ctx context.Context, c client.Client, feedURL, userID string) (string, error) {
 	options := client.StartWorkflowOptions{
 		TaskQueue: TaskQueue,
 	}
-	we, err := c.ExecuteWorkflow(ctx, options, workflows{}.CreateFeed, feedURL)
+	we, err := c.ExecuteWorkflow(ctx, options, workflows{}.CreateFeed, feedURL, userID)
 	if err != nil {
 		return "", fmt.Errorf("unable to execute workflow: %s", err)
 	}
@@ -90,7 +90,7 @@ func TriggerCreateFeedWorkflow(ctx context.Context, c client.Client, feedURL str
 // CreateFeed inserts a new feed, tries to sync, and rolls back if it's unable to.
 //
 // Returns the ID of the created feed.
-func (workflows) CreateFeed(ctx workflow.Context, feedURL string) (string, error) {
+func (workflows) CreateFeed(ctx workflow.Context, feedURL, userID string) (string, error) {
 	options := workflow.ActivityOptions{
 		StartToCloseTimeout: 3 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -109,16 +109,6 @@ func (workflows) CreateFeed(ctx workflow.Context, feedURL string) (string, error
 		return "", err
 	}
 
-	// Make sure the feed hasn't already been synced
-	var feed seymour.Feed
-	if err := workflow.ExecuteActivity(ctx, acts.Feed, feedID).Get(ctx, &feed); err != nil {
-		l.Error("failed to fetch feed", "error", err)
-	}
-	if feed.LastSyncedAt != nil { // Exit early
-		l.Info("feed already synced", "feed_id", feedID)
-		return feedID, nil
-	}
-
 	// Sync the feed
 	err := workflow.ExecuteActivity(ctx, acts.SyncFeed, feedID).Get(ctx, nil)
 	if err != nil {
@@ -133,14 +123,48 @@ func (workflows) CreateFeed(ctx workflow.Context, feedURL string) (string, error
 		return "", err
 	}
 
+	// Trigger a refresh of that user's timeline
+	ctx = workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
+		// Ensure only one judgement at a time, allow current one to process
+		WorkflowID:            "refresh-user-timeline-" + userID,
+		WorkflowIDReusePolicy: enums.WORKFLOW_ID_REUSE_POLICY_TERMINATE_IF_RUNNING,
+		ParentClosePolicy:     enums.PARENT_CLOSE_POLICY_ABANDON,
+		TaskQueue:             TaskQueue,
+	})
+	if err := workflow.ExecuteChildWorkflow(ctx, workflows.RefreshUserTimeline, userID).GetChildWorkflowExecution().Get(ctx, nil); err != nil {
+		l.Error("failed to start child workflow", "error", err)
+		return "", err
+	}
+
 	return feedID, nil
 }
 
-// This workflow grabs all the different subscriptions for users and makes sure that they've
-// had the possible entries put into their timeline.
-//
-// Should also kick off workflows to judge entries for each user.
-func (workflows) RefreshTimelines(ctx workflow.Context) error {
+func (workflows) RefreshAllUserTimelines(ctx workflow.Context) error {
+	l := workflow.GetLogger(ctx)
+
+	// Get all user ids
+	var ids []string
+	if err := workflow.ExecuteActivity(ctx, acts.AllUserIDs).Get(ctx, &ids); err != nil {
+		return err
+	}
+
+	wg := workflow.NewWaitGroup(ctx)
+	wg.Add(len(ids))
+	for _, id := range ids {
+		workflow.Go(ctx, func(ctx workflow.Context) {
+			if err := workflow.ExecuteActivity(ctx, workflows.RefreshUserTimeline, id).Get(ctx, nil); err != nil {
+				l.Error("failed to refresh user timeline", "error", err)
+			}
+		})
+	}
+
+	wg.Wait(ctx)
+	return nil
+}
+
+// RefreshUserTimeline syncs any missing entries for the user based on
+// their subscriptions, and then judges their new timeline.
+func (workflows) RefreshUserTimeline(ctx workflow.Context, userID string) error {
 	options := workflow.ActivityOptions{
 		StartToCloseTimeout: 3 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -152,26 +176,29 @@ func (workflows) RefreshTimelines(ctx workflow.Context) error {
 	ctx = workflow.WithActivityOptions(ctx, options)
 	l := workflow.GetLogger(ctx)
 
-	var users []string
-	if err := workflow.ExecuteActivity(ctx, acts.InsertMissingTimelineEntries).Get(ctx, &users); err != nil {
+	var missingEntryCount int
+	if err := workflow.ExecuteActivity(ctx, acts.InsertMissingTimelineEntries, userID).Get(ctx, &missingEntryCount); err != nil {
 		l.Error("failed to insert missing timeline entries", "error", err)
 		return err
 	}
 
-	// Refresh the timelines for each user
-	for _, userID := range users {
-		// Start child workflow to judge each member's timeline
-		ctx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
-			// Ensure only one judgement at a time, allow current one to process
-			WorkflowID:            "judge-user-timeline-" + userID,
-			WorkflowIDReusePolicy: enums.WORKFLOW_ID_REUSE_POLICY_TERMINATE_IF_RUNNING,
-			ParentClosePolicy:     enums.PARENT_CLOSE_POLICY_ABANDON,
-			TaskQueue:             TaskQueue,
-		})
-		if err := workflow.ExecuteChildWorkflow(ctx, workflows.JudgeUserTimeline, userID).GetChildWorkflowExecution().Get(ctx, nil); err != nil {
-			l.Error("failed to start child workflow", "error", err)
-			return err
-		}
+	// If no entries added, just exit early
+	l.Debug("no entries added, return early")
+	if missingEntryCount == 0 {
+		return nil
+	}
+
+	// Start child workflow to judge the user's timeline
+	ctx = workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
+		// Ensure only one judgement at a time, allow current one to process
+		WorkflowID:            "judge-user-timeline-" + userID,
+		WorkflowIDReusePolicy: enums.WORKFLOW_ID_REUSE_POLICY_TERMINATE_IF_RUNNING,
+		ParentClosePolicy:     enums.PARENT_CLOSE_POLICY_ABANDON,
+		TaskQueue:             TaskQueue,
+	})
+	if err := workflow.ExecuteChildWorkflow(ctx, workflows.JudgeUserTimeline, userID).GetChildWorkflowExecution().Get(ctx, nil); err != nil {
+		l.Error("failed to start child workflow", "error", err)
+		return err
 	}
 
 	return nil
