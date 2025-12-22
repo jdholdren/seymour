@@ -40,7 +40,6 @@ func (workflows) SyncAllFeeds(ctx workflow.Context) error {
 	}
 
 	wg := workflow.NewWaitGroup(ctx)
-	wg.Add(batches)
 	for i := range batches {
 		// Get a page of feed ID's
 		var ids []string
@@ -48,6 +47,7 @@ func (workflows) SyncAllFeeds(ctx workflow.Context) error {
 			l.Error("failed to get feed IDs", "error", err)
 			return err
 		}
+		wg.Add(len(ids))
 
 		for _, id := range ids {
 			workflow.Go(ctx, func(ctx workflow.Context) {
@@ -140,6 +140,13 @@ func (workflows) CreateFeed(ctx workflow.Context, feedURL, userID string) (strin
 }
 
 func (workflows) RefreshAllUserTimelines(ctx workflow.Context) error {
+	options := workflow.ActivityOptions{
+		StartToCloseTimeout: 30 * time.Second,
+		RetryPolicy: &temporal.RetryPolicy{
+			MaximumAttempts: 1,
+		},
+	}
+	ctx = workflow.WithActivityOptions(ctx, options)
 	l := workflow.GetLogger(ctx)
 
 	// Get all user ids
@@ -152,9 +159,10 @@ func (workflows) RefreshAllUserTimelines(ctx workflow.Context) error {
 	wg.Add(len(ids))
 	for _, id := range ids {
 		workflow.Go(ctx, func(ctx workflow.Context) {
-			if err := workflow.ExecuteActivity(ctx, workflows.RefreshUserTimeline, id).Get(ctx, nil); err != nil {
+			if err := workflow.ExecuteChildWorkflow(ctx, workflows.RefreshUserTimeline, id).GetChildWorkflowExecution().Get(ctx, nil); err != nil {
 				l.Error("failed to refresh user timeline", "error", err)
 			}
+			wg.Done()
 		})
 	}
 

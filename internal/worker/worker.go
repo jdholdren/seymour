@@ -52,16 +52,7 @@ func registerEverything(ctx context.Context, w worker.Worker, a activities, cli 
 	w.RegisterWorkflow(wfs.RefreshAllUserTimelines)
 
 	// Activities
-	//
-	// TODO(jdh): Some of these are too granular, make them more action-based and not have so much
-	// schema in there.
-	w.RegisterActivity(a.SyncFeed)
-	w.RegisterActivity(a.CountAllFeeds)
-	w.RegisterActivity(a.RemoveFeed)
-	w.RegisterActivity(a.CreateFeed)
-	w.RegisterActivity(a.InsertMissingTimelineEntries)
-	w.RegisterActivity(a.JudgeEntries)
-	w.RegisterActivity(a.MarkEntriesAsJudged)
+	w.RegisterActivity(&a)
 
 	// Schedules:
 	// Sync RSS feeds
