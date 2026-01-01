@@ -53,7 +53,7 @@ func (workflows) SyncAllFeeds(ctx workflow.Context) error {
 			workflow.Go(ctx, func(ctx workflow.Context) {
 				defer wg.Done()
 
-				if err := workflow.ExecuteActivity(ctx, acts.SyncFeed, id).Get(ctx, nil); err != nil {
+				if err := workflow.ExecuteActivity(ctx, acts.SyncFeed, id, true).Get(ctx, nil); err != nil {
 					l.Error("failed to sync feed", "feed_id", id, "error", err)
 				}
 			})
