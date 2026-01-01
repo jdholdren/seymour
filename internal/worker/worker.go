@@ -7,7 +7,6 @@ import (
 
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
-	"go.uber.org/fx"
 
 	"github.com/jdholdren/seymour/internal/seymour"
 )
@@ -15,27 +14,16 @@ import (
 const TaskQueue = "shared"
 
 // NewWorker sets up the worker with registration of workflows, activities, and schedules.
-func NewWorker(lc fx.Lifecycle, repo seymour.Repository, cli client.Client) (worker.Worker, error) {
+func NewWorker(ctx context.Context, repo seymour.Repository, cli client.Client) (worker.Worker, error) {
 	a := activities{
 		repo: repo,
 	}
 
 	w := worker.New(cli, TaskQueue, worker.Options{})
 
-	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
-			if err := registerEverything(ctx, w, a, cli); err != nil {
-				return fmt.Errorf("error registering workflows and activities: %T, %v", err, err)
-			}
-
-			// Run the worker in a long-lived goroutine
-			return w.Start()
-		},
-		OnStop: func(context.Context) error {
-			w.Stop()
-			return nil
-		},
-	})
+	if err := registerEverything(ctx, w, a, cli); err != nil {
+		return nil, fmt.Errorf("error registering workflows and activities: %T, %v", err, err)
+	}
 
 	return w, nil
 }

@@ -13,7 +13,6 @@ import (
 	"github.com/gorilla/securecookie"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"go.temporal.io/sdk/client"
-	"go.uber.org/fx"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
 
@@ -51,49 +50,41 @@ type (
 
 		DebugEndpoints bool
 	}
-
-	Params struct {
-		fx.In
-
-		Config      ServerConfig
-		Repository  seymour.Repository
-		TemporalCli client.Client
-	}
 )
 
-func NewServer(lc fx.Lifecycle, p Params) Server {
+func NewServer(ctx context.Context, config ServerConfig, repo seymour.Repository, temporalCli client.Client) *Server {
 	var (
 		r        = serverutil.ErrRouter{Router: mux.NewRouter()}
 		cache, _ = lru.New[string, FeedEntryResp](1024)
 	)
 
 	srvr := Server{
+		fetchClient: &http.Client{
+			Timeout: 2 * time.Second,
+		},
+		entryRespCache: cache,
+		secureCookie:   securecookie.New(config.CookieHashKey, config.CookieBlockKey),
+		httpsCookies:   config.HttpsCookies,
+		ssoRedirectURL: config.SSORedirectURL,
+		ghOauthConfig: oauth2.Config{
+			ClientID:     config.GithubClientID,
+			ClientSecret: config.GithubClientSecret,
+			Scopes:       []string{},
+			Endpoint:     github.Endpoint,
+		},
+		repo:    repo,
+		tempCli: temporalCli,
 		Server: &http.Server{
-			Addr:         fmt.Sprintf(":%d", p.Config.Port),
+			Addr:         fmt.Sprintf(":%d", config.Port),
 			ReadTimeout:  5 * time.Second,
 			WriteTimeout: 5 * time.Second,
 			Handler: handlers.CORS(
-				handlers.AllowedOrigins([]string{p.Config.CorsHeader}),
+				handlers.AllowedOrigins([]string{config.CorsHeader}),
 				handlers.AllowCredentials(),
 				handlers.AllowedMethods([]string{http.MethodGet, http.MethodPost, http.MethodOptions}),
 				handlers.AllowedHeaders([]string{"content-type"}),
 			)(r),
 		},
-		fetchClient: &http.Client{
-			Timeout: 2 * time.Second,
-		},
-		entryRespCache: cache,
-		secureCookie:   securecookie.New(p.Config.CookieHashKey, p.Config.CookieBlockKey),
-		httpsCookies:   p.Config.HttpsCookies,
-		ssoRedirectURL: p.Config.SSORedirectURL,
-		ghOauthConfig: oauth2.Config{
-			ClientID:     p.Config.GithubClientID,
-			ClientSecret: p.Config.GithubClientSecret,
-			Scopes:       []string{},
-			Endpoint:     github.Endpoint,
-		},
-		repo:    p.Repository,
-		tempCli: p.TemporalCli,
 	}
 
 	r.Use(serverutil.AccessLogMiddleware) // Log everything
@@ -102,7 +93,7 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 	r.HandleFuncE("/api/sso-callback", srvr.handleSSOCallback).Methods(http.MethodGet)
 	r.HandleFuncE("/api/logout", srvr.getLogout).Methods(http.MethodGet)
 
-	if p.Config.DebugEndpoints {
+	if config.DebugEndpoints {
 		// For local testing
 		r.HandleFuncE("/api/login", srvr.handleDebugLogin).Methods(http.MethodPost)
 	}
@@ -122,20 +113,9 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 	// Reader view
 	authed.HandleFuncE("/api/feed-entries/{feedEntryID}", srvr.getFeedEntry).Methods(http.MethodGet)
 
-	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
-			go srvr.ListenAndServe()
+	slog.Debug("configured citadel server", "port", config.Port)
 
-			slog.Debug("started citadel server", "port", p.Config.Port)
-
-			return nil
-		},
-		OnStop: func(ctx context.Context) error {
-			return srvr.Shutdown(ctx)
-		},
-	})
-
-	return srvr
+	return &srvr
 }
 
 // Viewer is the structured data about the current user in the frontend.
