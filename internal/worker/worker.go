@@ -15,11 +15,9 @@ import (
 const TaskQueue = "shared"
 
 // NewWorker sets up the worker with registration of workflows, activities, and schedules.
-func NewWorker(lc fx.Lifecycle, feedService seymour.FeedService, tlService seymour.TimelineService, uService seymour.UserService, cli client.Client) (worker.Worker, error) {
+func NewWorker(lc fx.Lifecycle, repo seymour.Repository, cli client.Client) (worker.Worker, error) {
 	a := activities{
-		feedService:     feedService,
-		timelineService: tlService,
-		userService:     uService,
+		repo: repo,
 	}
 
 	w := worker.New(cli, TaskQueue, worker.Options{})

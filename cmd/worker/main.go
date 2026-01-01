@@ -72,16 +72,13 @@ func main() {
 			dbx,
 			fx.Annotate(ctx, fx.As(new(context.Context))),
 			fx.Annotate(temporalCli, fx.As(new(client.Client))),
-			fx.Annotate(repo, fx.As(new(seymour.FeedService))),
-			fx.Annotate(repo, fx.As(new(seymour.TimelineService))),
-			fx.Annotate(repo, fx.As(new(seymour.UserService))),
+			fx.Annotate(repo, fx.As(new(seymour.Repository))),
 		),
 		fx.Provide(seyworker.NewWorker),
 		fx.Invoke(func(
 			ctx context.Context,
-			a seymour.FeedService,
+			repo seymour.Repository,
 			c client.Client,
-			t seymour.TimelineService,
 			w worker.Worker,
 		) {
 			// Start the worker

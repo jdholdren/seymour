@@ -85,13 +85,13 @@ func (s Server) postSusbcriptions(w http.ResponseWriter, r *http.Request) error 
 	if err != nil {
 		return err
 	}
-	feed, err := s.feedRepo.Feed(ctx, feedID)
+	feed, err := s.repo.Feed(ctx, feedID)
 	if err != nil {
 		return err
 	}
 
 	// Add the feed to the user's subscriptions
-	if err := s.timeline.CreateSubscription(ctx, sess.UserID, feed.ID); err != nil {
+	if err := s.repo.CreateSubscription(ctx, sess.UserID, feed.ID); err != nil {
 		return err
 	}
 
@@ -117,7 +117,7 @@ func (s Server) getSusbcriptions(w http.ResponseWriter, r *http.Request) error {
 		sess = session(r, s.secureCookie)
 	)
 
-	subs, err := s.timeline.UserSubscriptions(ctx, sess.UserID)
+	subs, err := s.repo.UserSubscriptions(ctx, sess.UserID)
 	if err != nil {
 		return err
 	}
@@ -127,7 +127,7 @@ func (s Server) getSusbcriptions(w http.ResponseWriter, r *http.Request) error {
 	}
 	for _, sub := range subs {
 		// Totally inefficient, yet sufficient:
-		feed, err := s.feedRepo.Feed(ctx, sub.FeedID)
+		feed, err := s.repo.Feed(ctx, sub.FeedID)
 		if err != nil {
 			return err
 		}
@@ -181,7 +181,7 @@ func (s Server) getUserTimeline(w http.ResponseWriter, r *http.Request) error {
 		return seyerrs.E("not allowed", http.StatusForbidden)
 	}
 
-	tlEnts, err := s.timeline.UserTimelineEntries(ctx, userID, seymour.UserTimelineEntriesArgs{
+	tlEnts, err := s.repo.UserTimelineEntries(ctx, userID, seymour.UserTimelineEntriesArgs{
 		Status: seymour.TimelineEntryStatusApproved,
 		FeedID: feedID,
 	})
@@ -194,7 +194,7 @@ func (s Server) getUserTimeline(w http.ResponseWriter, r *http.Request) error {
 		feedEntIDs = append(feedEntIDs, ent.FeedEntryID)
 	}
 
-	feedEnts, err := s.feedRepo.Entries(ctx, feedEntIDs)
+	feedEnts, err := s.repo.Entries(ctx, feedEntIDs)
 	if err != nil {
 		return err
 	}
@@ -204,7 +204,7 @@ func (s Server) getUserTimeline(w http.ResponseWriter, r *http.Request) error {
 		feedIDs = append(feedIDs, ent.FeedID)
 	}
 
-	feeds, err := s.feedRepo.Feeds(ctx, feedIDs)
+	feeds, err := s.repo.Feeds(ctx, feedIDs)
 	if err != nil {
 		return err
 	}
@@ -255,7 +255,7 @@ func (s Server) getFeedEntry(w http.ResponseWriter, r *http.Request) error {
 		feedEntryID = mux.Vars(r)["feedEntryID"]
 	)
 
-	entry, err := s.feedRepo.Entry(ctx, feedEntryID)
+	entry, err := s.repo.Entry(ctx, feedEntryID)
 	if err != nil {
 		return err
 	}

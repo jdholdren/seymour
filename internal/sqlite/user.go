@@ -9,9 +9,6 @@ import (
 	"github.com/jdholdren/seymour/internal/seymour"
 )
 
-// Usually not a fan of this pattern, but it's basically required since fx is being used.
-var _ seymour.UserService = (*Repo)(nil)
-
 const userNamespace = "-usr"
 
 func (r Repo) EnsureUser(ctx context.Context, usr seymour.User) (seymour.User, error) {

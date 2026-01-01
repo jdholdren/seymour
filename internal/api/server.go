@@ -30,10 +30,8 @@ type (
 		fetchClient    *http.Client
 		entryRespCache *lru.Cache[string, FeedEntryResp]
 
-		userRepo seymour.UserService
-		tempCli  client.Client
-		feedRepo seymour.FeedService
-		timeline seymour.TimelineService
+		repo    seymour.Repository
+		tempCli client.Client
 
 		ghOauthConfig  oauth2.Config
 		secureCookie   *securecookie.SecureCookie
@@ -57,11 +55,9 @@ type (
 	Params struct {
 		fx.In
 
-		Config       ServerConfig
-		UserService  seymour.UserService
-		TemporalCli  client.Client
-		FeedRepo     seymour.FeedService
-		TimelineRepo seymour.TimelineService
+		Config      ServerConfig
+		Repository  seymour.Repository
+		TemporalCli client.Client
 	}
 )
 
@@ -96,10 +92,8 @@ func NewServer(lc fx.Lifecycle, p Params) Server {
 			Scopes:       []string{},
 			Endpoint:     github.Endpoint,
 		},
-		userRepo: p.UserService,
-		tempCli:  p.TemporalCli,
-		feedRepo: p.FeedRepo,
-		timeline: p.TimelineRepo,
+		repo:    p.Repository,
+		tempCli: p.TemporalCli,
 	}
 
 	r.Use(serverutil.AccessLogMiddleware) // Log everything
@@ -168,7 +162,7 @@ func (s Server) handleViewer(w http.ResponseWriter, r *http.Request) error {
 	if sess.UserID == "" {
 		return serverutil.WriteJSON(w, http.StatusOK, struct{}{})
 	}
-	usr, err := s.userRepo.User(r.Context(), sess.UserID)
+	usr, err := s.repo.User(r.Context(), sess.UserID)
 	if errors.Is(err, seymour.ErrNotFound) {
 		return serverutil.WriteJSON(w, http.StatusOK, struct{}{})
 	}
@@ -178,7 +172,7 @@ func (s Server) handleViewer(w http.ResponseWriter, r *http.Request) error {
 
 	// Get the feeds that the user has subscribed to.
 	// This will populate the nav bar with the individual filters for their personal timeline.
-	subs, err := s.timeline.UserSubscriptions(ctx, usr.ID)
+	subs, err := s.repo.UserSubscriptions(ctx, usr.ID)
 	if err != nil {
 		return err
 	}
@@ -188,7 +182,7 @@ func (s Server) handleViewer(w http.ResponseWriter, r *http.Request) error {
 	for _, sub := range subs {
 		feedIDs = append(feedIDs, sub.FeedID)
 	}
-	feeds, err := s.feedRepo.Feeds(ctx, feedIDs)
+	feeds, err := s.repo.Feeds(ctx, feedIDs)
 	if err != nil {
 		return err
 	}

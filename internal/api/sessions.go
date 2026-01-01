@@ -131,7 +131,7 @@ func (s Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) error 
 	}
 
 	// Ensure the user
-	usr, err := s.userRepo.EnsureUser(r.Context(), seymour.User{
+	usr, err := s.repo.EnsureUser(r.Context(), seymour.User{
 		GithubID: info.Username,
 		Email:    info.NotificationEmail,
 	})
