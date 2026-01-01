@@ -60,8 +60,8 @@ func (workflows) SyncAllFeeds(ctx workflow.Context) error {
 		}
 
 	}
-
 	wg.Wait(ctx)
+
 	return nil
 }
 
@@ -150,14 +150,17 @@ func (workflows) RefreshAllUserTimelines(ctx workflow.Context) error {
 	l := workflow.GetLogger(ctx)
 
 	// Get all user ids
-	var ids []string
-	if err := workflow.ExecuteActivity(ctx, acts.AllUserIDs).Get(ctx, &ids); err != nil {
+	var userIDs []string
+	if err := workflow.ExecuteActivity(ctx, acts.AllUserIDs).Get(ctx, &userIDs); err != nil {
 		return err
 	}
 
+	l.Info("starting user timeline refresh", "total_users", len(userIDs))
+
+	// Process users with controlled concurrency to avoid overwhelming Temporal
 	wg := workflow.NewWaitGroup(ctx)
-	wg.Add(len(ids))
-	for _, id := range ids {
+	wg.Add(len(userIDs))
+	for _, id := range userIDs {
 		workflow.Go(ctx, func(ctx workflow.Context) {
 			if err := workflow.ExecuteChildWorkflow(ctx, workflows.RefreshUserTimeline, id).GetChildWorkflowExecution().Get(ctx, nil); err != nil {
 				l.Error("failed to refresh user timeline", "error", err)
@@ -167,6 +170,7 @@ func (workflows) RefreshAllUserTimelines(ctx workflow.Context) error {
 	}
 
 	wg.Wait(ctx)
+	l.Info("completed user timeline refresh", "total_users", len(userIDs))
 	return nil
 }
 
