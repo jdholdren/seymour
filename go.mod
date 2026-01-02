@@ -22,7 +22,6 @@ require (
 	github.com/sym01/htmlsanitizer v1.1.0
 	go.temporal.io/api v1.46.0
 	go.temporal.io/sdk v1.34.0
-	go.uber.org/fx v1.23.0
 	golang.org/x/crypto/x509roots/fallback v0.0.0-20250515174705-ebc8e4631531
 	golang.org/x/oauth2 v0.22.0
 	modernc.org/sqlite v1.18.1
@@ -48,14 +47,12 @@ require (
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/nexus-rpc/sdk-go v0.3.0 // indirect
+	github.com/oklog/run v1.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	github.com/robfig/cron v1.2.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
-	go.uber.org/dig v1.18.0 // indirect
-	go.uber.org/multierr v1.10.0 // indirect
-	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/mod v0.21.0 // indirect
 	golang.org/x/net v0.36.0 // indirect
 	golang.org/x/sync v0.11.0 // indirect

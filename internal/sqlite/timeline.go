@@ -15,9 +15,6 @@ const (
 	timelineEntryNamespace = "tl-entry"
 )
 
-// Usually not a fan of this pattern, but it's basically required since fx is being used.
-var _ seymour.TimelineService = (*Repo)(nil)
-
 func (r Repo) CreateSubscription(ctx context.Context, userID string, feedID string) error {
 	const q = `INSERT OR IGNORE INTO subscriptions (id, user_id, feed_id) VALUES (?, ?, ?);`
 
@@ -70,8 +67,6 @@ func (r Repo) MissingEntries(ctx context.Context, userID string) ([]seymour.Miss
 	if err := r.db.SelectContext(ctx, &missingEntries, q, userID); err != nil {
 		return nil, fmt.Errorf("error selecting missing entries: %s", err)
 	}
-
-	fmt.Println(missingEntries)
 
 	return missingEntries, nil
 }

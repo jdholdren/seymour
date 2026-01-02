@@ -13,9 +13,6 @@ import (
 	"github.com/jdholdren/seymour/internal/seymour"
 )
 
-// Usually not a fan of this pattern, but it's basically required since fx is being used.
-var _ seymour.FeedService = (*Repo)(nil)
-
 const (
 	feedNamespace  = "-fd"
 	entryNamespace = "-ntry"

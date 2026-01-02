@@ -9,16 +9,14 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/oklog/run"
 	"github.com/sethvargo/go-envconfig"
 	"github.com/sethvargo/go-retry"
 	"go.temporal.io/sdk/client"
-	"go.temporal.io/sdk/worker"
-	"go.uber.org/fx"
 	_ "golang.org/x/crypto/x509roots/fallback"
 	_ "modernc.org/sqlite"
 
 	"github.com/jdholdren/seymour/internal/logger"
-	"github.com/jdholdren/seymour/internal/seymour"
 	seyqlite "github.com/jdholdren/seymour/internal/sqlite"
 	seyworker "github.com/jdholdren/seymour/internal/worker"
 )
@@ -67,24 +65,34 @@ func main() {
 		log.Fatalln("Unable to create Temporal client:", err)
 	}
 
-	fx.New(
-		fx.Supply(
-			dbx,
-			fx.Annotate(ctx, fx.As(new(context.Context))),
-			fx.Annotate(temporalCli, fx.As(new(client.Client))),
-			fx.Annotate(repo, fx.As(new(seymour.FeedService))),
-			fx.Annotate(repo, fx.As(new(seymour.TimelineService))),
-			fx.Annotate(repo, fx.As(new(seymour.UserService))),
-		),
-		fx.Provide(seyworker.NewWorker),
-		fx.Invoke(func(
-			ctx context.Context,
-			a seymour.FeedService,
-			c client.Client,
-			t seymour.TimelineService,
-			w worker.Worker,
-		) {
-			// Start the worker
-		}),
-	).Run()
+	// Create the worker
+	w, err := seyworker.NewWorker(ctx, repo, temporalCli)
+	if err != nil {
+		log.Fatalf("Failed to create worker: %v", err)
+	}
+
+	// Set up run group
+	var g run.Group
+
+	// Add temporal worker
+	g.Add(func() error {
+		log.Println("Worker starting...")
+		if err := w.Start(); err != nil {
+			return err
+		}
+		// Block forever until shutdown
+		select {}
+	}, func(error) {
+		log.Println("Shutting down worker...")
+		w.Stop()
+	})
+
+	// Add signal handler
+	g.Add(run.SignalHandler(ctx, os.Interrupt))
+
+	// Run all services
+	if err := g.Run(); err != nil {
+		log.Printf("Service group error: %v", err)
+	}
+	log.Println("Worker stopped")
 }

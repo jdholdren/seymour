@@ -10,16 +10,18 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/oklog/run"
 	"github.com/sethvargo/go-envconfig"
 	"github.com/sethvargo/go-retry"
 	"go.temporal.io/sdk/client"
-	"go.uber.org/fx"
+
+	"net/http"
+
 	_ "modernc.org/sqlite"
 
 	"github.com/jdholdren/seymour/internal/api"
 	"github.com/jdholdren/seymour/internal/logger"
 	"github.com/jdholdren/seymour/internal/migrations"
-	"github.com/jdholdren/seymour/internal/seymour"
 	seyqlite "github.com/jdholdren/seymour/internal/sqlite"
 )
 
@@ -81,28 +83,47 @@ func main() {
 		log.Fatalln("Unable to create Temporal client:", err)
 	}
 
-	// Start the application
-	fx.New(
-		fx.Supply(
-			api.ServerConfig{
-				Port:               cfg.Port,
-				GithubClientID:     cfg.GithubClientID,
-				GithubClientSecret: cfg.GithubClientSecret,
-				CookieHashKey:      []byte(cfg.CookieHashKey),
-				CookieBlockKey:     []byte(cfg.CookieBlockKey),
-				HttpsCookies:       cfg.HTTPSCookies,
-				DebugEndpoints:     cfg.DebugEndpoints,
-				CorsHeader:         cfg.Cors,
-				SSORedirectURL:     cfg.SSORedirectURL,
-			},
-			dbx,
-			fx.Annotate(ctx, fx.As(new(context.Context))),
-			fx.Annotate(temporalCli, fx.As(new(client.Client))),
-			fx.Annotate(repo, fx.As(new(seymour.FeedService))),
-			fx.Annotate(repo, fx.As(new(seymour.TimelineService))),
-			fx.Annotate(repo, fx.As(new(seymour.UserService))),
-		),
-		api.Module,
-		fx.Invoke(func(api.Server) {}), // Start the BFF server
-	).Run()
+	// Create and start the server
+	serverConfig := api.ServerConfig{
+		Port:               cfg.Port,
+		GithubClientID:     cfg.GithubClientID,
+		GithubClientSecret: cfg.GithubClientSecret,
+		CookieHashKey:      []byte(cfg.CookieHashKey),
+		CookieBlockKey:     []byte(cfg.CookieBlockKey),
+		HttpsCookies:       cfg.HTTPSCookies,
+		DebugEndpoints:     cfg.DebugEndpoints,
+		CorsHeader:         cfg.Cors,
+		SSORedirectURL:     cfg.SSORedirectURL,
+	}
+
+	server := api.NewServer(ctx, serverConfig, repo, temporalCli)
+
+	// Set up run group
+	var g run.Group
+
+	// Add HTTP server
+	g.Add(func() error {
+		log.Printf("Server starting on port %d", cfg.Port)
+		if err := server.ListenAndServe(); err != http.ErrServerClosed {
+			return err
+		}
+		return nil
+	}, func(error) {
+		log.Println("Shutting down server...")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Printf("Server forced to shutdown: %v", err)
+		}
+	})
+
+	// Add signal handler
+	g.Add(run.SignalHandler(ctx, os.Interrupt))
+
+	// Run all services
+	if err := g.Run(); err != nil {
+		log.Printf("Service group error: %v", err)
+	}
+	log.Println("Server stopped")
 }
