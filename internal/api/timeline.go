@@ -225,12 +225,18 @@ func (s Server) getUserTimeline(w http.ResponseWriter, r *http.Request) error {
 		Items: make([]TimelineEntry, 0, len(tlEnts)),
 	}
 	for _, tlEntry := range tlEnts {
-		feedEntry := feedEntriesByID[tlEntry.FeedEntryID]
-		feed := feedByID[feedEntry.FeedID]
+		var (
+			feedEntry = feedEntriesByID[tlEntry.FeedEntryID]
+			feed      = feedByID[feedEntry.FeedID]
+			feedTitle string
+		)
+		if feed.Title != nil {
+			feedTitle = *feed.Title
+		}
 
 		resp.Items = append(resp.Items, TimelineEntry{
 			EntryID:     feedEntry.ID,
-			FeedName:    *feed.Title,
+			FeedName:    feedTitle,
 			Title:       feedEntry.Title,
 			Description: feedEntry.Description,
 			URL:         feedEntry.Link,

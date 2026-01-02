@@ -68,8 +68,6 @@ func (r Repo) MissingEntries(ctx context.Context, userID string) ([]seymour.Miss
 		return nil, fmt.Errorf("error selecting missing entries: %s", err)
 	}
 
-	fmt.Println(missingEntries)
-
 	return missingEntries, nil
 }
 

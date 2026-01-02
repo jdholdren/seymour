@@ -162,7 +162,10 @@ func (workflows) RefreshAllUserTimelines(ctx workflow.Context) error {
 	wg.Add(len(userIDs))
 	for _, id := range userIDs {
 		workflow.Go(ctx, func(ctx workflow.Context) {
-			if err := workflow.ExecuteChildWorkflow(ctx, workflows.RefreshUserTimeline, id).GetChildWorkflowExecution().Get(ctx, nil); err != nil {
+			childCtx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
+				ParentClosePolicy: enums.PARENT_CLOSE_POLICY_ABANDON,
+			})
+			if err := workflow.ExecuteChildWorkflow(childCtx, workflows.RefreshUserTimeline, id).GetChildWorkflowExecution().Get(ctx, nil); err != nil {
 				l.Error("failed to refresh user timeline", "error", err)
 			}
 			wg.Done()
