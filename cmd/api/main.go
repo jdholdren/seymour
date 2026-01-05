@@ -96,7 +96,7 @@ func main() {
 		SSORedirectURL:     cfg.SSORedirectURL,
 	}
 
-	server := api.NewServer(ctx, serverConfig, repo, temporalCli)
+	server := api.NewServer(serverConfig, repo, temporalCli)
 
 	// Set up run group
 	var g run.Group

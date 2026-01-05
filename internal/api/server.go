@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -52,7 +51,7 @@ type (
 	}
 )
 
-func NewServer(ctx context.Context, config ServerConfig, repo seymour.Repository, temporalCli client.Client) *Server {
+func NewServer(config ServerConfig, repo seymour.Repository, temporalCli client.Client) *Server {
 	var (
 		r        = serverutil.ErrRouter{Router: mux.NewRouter()}
 		cache, _ = lru.New[string, FeedEntryResp](1024)
@@ -112,6 +111,9 @@ func NewServer(ctx context.Context, config ServerConfig, repo seymour.Repository
 
 	// Reader view
 	authed.HandleFuncE("/api/feed-entries/{feedEntryID}", srvr.getFeedEntry).Methods(http.MethodGet)
+
+	// Accout management
+	authed.HandleFuncE("/account/prompt:precheck", srvr.postPromptPrecheck).Methods(http.MethodPost)
 
 	slog.Debug("configured citadel server", "port", config.Port)
 
