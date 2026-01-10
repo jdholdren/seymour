@@ -14,7 +14,6 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
 
-	"github.com/jdholdren/seymour/internal/serverutil"
 	"github.com/jdholdren/seymour/internal/seymour"
 )
 
@@ -85,7 +84,7 @@ func NewServer(config ServerConfig, repo seymour.Repository, temporalCli client.
 		},
 	}
 
-	r.Use(serverutil.AccessLogMiddleware) // Log everything
+	r.Use(AccessLogMiddleware) // Log everything
 	r.HandleFuncE("/api/viewer", srvr.handleViewer).Methods(http.MethodGet)
 	r.HandleFuncE("/api/sso-login", srvr.handleSSORedirect).Methods(http.MethodGet)
 	r.HandleFuncE("/api/sso-callback", srvr.handleSSOCallback).Methods(http.MethodGet)
