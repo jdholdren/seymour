@@ -22,10 +22,10 @@ type rssFeedResp struct {
 		Description string `xml:"description"`
 		Link        string `xml:"link"`
 		Items       []struct {
-			Title       string `xml:"title"`
-			Link        string `xml:"link"`
-			GUID        string `xml:"guid"`
-			Description string `xml:"description"`
+			Title       string   `xml:"title"`
+			Links       []string `xml:"link"`
+			GUID        string   `xml:"guid"`
+			Description string   `xml:"description"`
 		} `xml:"item"`
 	} `xml:"channel"`
 }
@@ -53,12 +53,21 @@ func Feed(ctx context.Context, feedID, feedURL string) (seymour.Feed, []seymour.
 	entries := []seymour.FeedEntry{}
 	for _, channel := range feedResp.Channel {
 		for _, item := range channel.Items {
+			var nonEmptyLink string
+			for _, link := range item.Links {
+				if link == "" {
+					continue
+				}
+
+				nonEmptyLink = link
+			}
+
 			entries = append(entries, seymour.FeedEntry{
 				FeedID:      feedID,
 				GUID:        item.GUID,
 				Title:       sanitize(item.Title),
 				Description: sanitize(item.Description),
-				Link:        item.Link,
+				Link:        nonEmptyLink,
 			})
 		}
 	}
