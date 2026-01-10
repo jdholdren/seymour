@@ -30,6 +30,7 @@ type Repository interface {
 	InsertEntry(ctx context.Context, entry TimelineEntry) error
 	UpdateTimelineEntry(ctx context.Context, id string, status TimelineEntryStatus) error
 	UserTimelineEntries(ctx context.Context, userID string, args UserTimelineEntriesArgs) ([]TimelineEntry, error)
+	UpdateUserPrompt(ctx context.Context, userID string, prompt string) error
 
 	// User operations
 	EnsureUser(ctx context.Context, usr User) (User, error)
@@ -73,6 +74,7 @@ type User struct {
 	ID        string    `db:"id"`
 	GithubID  string    `db:"github_id"`
 	Email     string    `db:"email"`
+	Prompt    string    `db:"prompt"`
 	CreatedAt time.Time `db:"created_at"`
 	UpdatedAt time.Time `db:"updated_at"`
 }

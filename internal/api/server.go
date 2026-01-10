@@ -113,7 +113,8 @@ func NewServer(config ServerConfig, repo seymour.Repository, temporalCli client.
 	authed.HandleFuncE("/api/feed-entries/{feedEntryID}", srvr.getFeedEntry).Methods(http.MethodGet)
 
 	// Accout management
-	authed.HandleFuncE("/account/prompt:precheck", srvr.postPromptPrecheck).Methods(http.MethodPost)
+	authed.HandleFuncE("/api/account/prompt:precheck", srvr.postPromptPrecheck).Methods(http.MethodPost)
+	authed.HandleFuncE("/api/account/prompt", srvr.postPrompt).Methods(http.MethodPost)
 
 	slog.Debug("configured citadel server", "port", config.Port)
 

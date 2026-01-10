@@ -61,3 +61,11 @@ func (r Repo) AllUserIDs(ctx context.Context) ([]string, error) {
 
 	return ids, nil
 }
+
+// UpdateUserPrompt updates a specific user's prompt in the database.
+func (r Repo) UpdateUserPrompt(ctx context.Context, userID string, prompt string) error {
+	const q = `UPDATE users SET prompt = ? WHERE id = ?;`
+
+	_, err := r.db.ExecContext(ctx, q, prompt, userID)
+	return err
+}
