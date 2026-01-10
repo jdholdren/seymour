@@ -13,7 +13,6 @@ import (
 	"github.com/sym01/htmlsanitizer"
 
 	seyerrs "github.com/jdholdren/seymour/internal/errors"
-	"github.com/jdholdren/seymour/internal/serverutil"
 	"github.com/jdholdren/seymour/internal/seymour"
 	"github.com/jdholdren/seymour/internal/worker"
 )
@@ -95,7 +94,7 @@ func (s Server) postSusbcriptions(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 
-	return serverutil.WriteJSON(w, http.StatusCreated, apiFeed(feed))
+	return writeJSON(w, http.StatusCreated, apiFeed(feed))
 }
 
 type SubscriptionResp struct {
@@ -151,7 +150,7 @@ func (s Server) getSusbcriptions(w http.ResponseWriter, r *http.Request) error {
 			LastSynced:      feed.LastSyncedAt,
 		})
 	}
-	return serverutil.WriteJSON(w, http.StatusCreated, resp)
+	return writeJSON(w, http.StatusCreated, resp)
 }
 
 type TimelineResp struct {
@@ -242,7 +241,7 @@ func (s Server) getUserTimeline(w http.ResponseWriter, r *http.Request) error {
 			URL:         feedEntry.Link,
 		})
 	}
-	return serverutil.WriteJSON(w, http.StatusOK, resp)
+	return writeJSON(w, http.StatusOK, resp)
 }
 
 type FeedEntryResp struct {
@@ -268,7 +267,7 @@ func (s Server) getFeedEntry(w http.ResponseWriter, r *http.Request) error {
 
 	// Cache results for less processing and prevent refetches
 	if resp, ok := s.entryRespCache.Get(feedEntryID); ok {
-		return serverutil.WriteJSON(w, http.StatusOK, resp)
+		return writeJSON(w, http.StatusOK, resp)
 	}
 
 	// TODO: Ensure this at sync time in the workflow
@@ -309,5 +308,5 @@ func (s Server) getFeedEntry(w http.ResponseWriter, r *http.Request) error {
 	// Add to the cache for next time
 	s.entryRespCache.Add(entry.ID, ret)
 
-	return serverutil.WriteJSON(w, http.StatusOK, ret)
+	return writeJSON(w, http.StatusOK, ret)
 }

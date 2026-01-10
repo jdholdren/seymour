@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	seyerrs "github.com/jdholdren/seymour/internal/errors"
-	"github.com/jdholdren/seymour/internal/serverutil"
 
 	goaway "github.com/TwiN/go-away"
 )
@@ -33,7 +32,7 @@ func (s Server) postPromptPrecheck(w http.ResponseWriter, r *http.Request) error
 		return seyerrs.E("profanity detected in prompt", http.StatusUnprocessableEntity)
 	}
 
-	return serverutil.WriteJSON(w, http.StatusOK, struct{}{})
+	return writeJSON(w, http.StatusOK, struct{}{})
 }
 
 // This route is used to aid the front-end with validation, like running a profanity check.
@@ -63,5 +62,5 @@ func (s Server) postPrompt(w http.ResponseWriter, r *http.Request) error {
 		return seyerrs.E(err, http.StatusInternalServerError)
 	}
 
-	return serverutil.WriteJSON(w, http.StatusOK, struct{}{})
+	return writeJSON(w, http.StatusOK, struct{}{})
 }
