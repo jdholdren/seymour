@@ -6,10 +6,10 @@ services:
       args:
         MAIN_PATH: ./cmd/worker
     environment:
-      - DATABASE=/data/citadel.sqlite
+      - DATABASE=/data/citadel/citadel.sqlite
       - TEMPORAL_HOST_PORT=host.docker.internal:7236
     volumes:
-      - ./data/citadel/citadel.sqlite:/data/citadel.sqlite
+      - ./data/citadel:/data/citadel
     depends_on:
       - temporal-server
   api:
@@ -22,7 +22,7 @@ services:
       - "4444:4444"
     env_file: .env
     environment:
-      - DATABASE=/data/citadel.sqlite
+      - DATABASE=/data/citadel/citadel.sqlite
       - TEMPORAL_HOST_PORT=host.docker.internal:7236
       - PORT=4444
       - HTTPS_COOKIES=false
@@ -30,7 +30,7 @@ services:
       - CORS=http://localhost:3000
       - SSO_REDIRECT_URL=http://localhost:3000
     volumes:
-      - ./data/citadel/citadel.sqlite:/data/citadel.sqlite
+      - ./data/citadel:/data/citadel
     depends_on:
       - temporal-server
   temporal-server:
