@@ -171,8 +171,8 @@ func (r Repo) InsertEntries(ctx context.Context, entries []seymour.FeedEntry) er
 		entries[i].ID = fmt.Sprintf("%s%s", uuid.New().String(), entryNamespace)
 	}
 
-	const q = `INSERT INTO feed_entries (id, feed_id, title, description, guid, link)
-	VALUES (:id, :feed_id, :title, :description, :guid, :link)
+	const q = `INSERT INTO feed_entries (id, feed_id, title, description, guid, link, publish_time)
+	VALUES (:id, :feed_id, :title, :description, :guid, :link, :publish_time)
 	ON CONFLICT(guid) DO NOTHING;`
 	if _, err := r.db.NamedExecContext(ctx, q, entries); err != nil {
 		return fmt.Errorf("error inserting entries; %s", err)
