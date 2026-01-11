@@ -2,6 +2,8 @@ package seymour
 
 import (
 	"context"
+	"database/sql/driver"
+	"fmt"
 	"time"
 )
 
@@ -41,59 +43,59 @@ type Repository interface {
 
 // Feed represents an RSS feed's details.
 type Feed struct {
-	ID           string     `db:"id"`
-	Title        *string    `db:"title"`
-	URL          string     `db:"url"`
-	Description  *string    `db:"description"`
-	LastSyncedAt *time.Time `db:"last_synced_at"`
-	CreatedAt    time.Time  `db:"created_at"`
-	UpdatedAt    time.Time  `db:"updated_at"`
+	ID           string  `db:"id"`
+	Title        *string `db:"title"`
+	URL          string  `db:"url"`
+	Description  *string `db:"description"`
+	LastSyncedAt *DBTime `db:"last_synced_at"`
+	CreatedAt    DBTime  `db:"created_at"`
+	UpdatedAt    DBTime  `db:"updated_at"`
 }
 
 // FeedEntry represents a unique entry in an RSS feed.
 type FeedEntry struct {
-	ID          string     `db:"id"`
-	FeedID      string     `db:"feed_id"`
-	GUID        string     `db:"guid"`
-	Title       string     `db:"title"`
-	Description string     `db:"description"`
-	CreatedAt   time.Time  `db:"created_at"`
-	PublishTime *time.Time `db:"publish_time"`
-	Link        string     `db:"link"`
+	ID          string `db:"id"`
+	FeedID      string `db:"feed_id"`
+	GUID        string `db:"guid"`
+	Title       string `db:"title"`
+	Description string `db:"description"`
+	CreatedAt   DBTime `db:"created_at"`
+	PublishTime DBTime `db:"publish_time"`
+	Link        string `db:"link"`
 }
 
 // UpdateFeedArgs holds the optional fields for updating a feed.
 type UpdateFeedArgs struct {
 	Title       string
 	Description string
-	LastSynced  time.Time
+	LastSynced  DBTime
 }
 
 // User represents a user in the system.
 type User struct {
-	ID        string    `db:"id"`
-	GithubID  string    `db:"github_id"`
-	Email     string    `db:"email"`
-	Prompt    string    `db:"prompt"`
-	CreatedAt time.Time `db:"created_at"`
-	UpdatedAt time.Time `db:"updated_at"`
+	ID        string `db:"id"`
+	GithubID  string `db:"github_id"`
+	Email     string `db:"email"`
+	Prompt    string `db:"prompt"`
+	CreatedAt DBTime `db:"created_at"`
+	UpdatedAt DBTime `db:"updated_at"`
 }
 
 // Subscription represents a user's subscription to a feed.
 type Subscription struct {
-	ID        string    `db:"id"`
-	UserID    string    `db:"user_id"`
-	FeedID    string    `db:"feed_id"`
-	CreatedAt time.Time `db:"created_at"`
+	ID        string `db:"id"`
+	UserID    string `db:"user_id"`
+	FeedID    string `db:"feed_id"`
+	CreatedAt DBTime `db:"created_at"`
 }
 
 // TimelineEntry represents an entry in a user's timeline.
 type TimelineEntry struct {
-	ID          string    `db:"id"`
-	UserID      string    `db:"user_id"`
-	FeedEntryID string    `db:"feed_entry_id"`
-	CreatedAt   time.Time `db:"created_at"`
-	FeedID      string    `db:"feed_id"`
+	ID          string `db:"id"`
+	UserID      string `db:"user_id"`
+	FeedEntryID string `db:"feed_entry_id"`
+	CreatedAt   DBTime `db:"created_at"`
+	FeedID      string `db:"feed_id"`
 
 	// For curation: if the entry has been approved or not by the AI
 	Status TimelineEntryStatus `db:"status"`
@@ -121,3 +123,42 @@ const (
 	TimelineEntryStatusApproved          TimelineEntryStatus = "approved"
 	TimelineEntryStatusRejected          TimelineEntryStatus = "rejected"
 )
+
+// DBTime is a sqlite-acceptable implementation of a time that can be marshaled in and out of
+// a sqlite db.
+type DBTime struct {
+	Time time.Time
+}
+
+// Value implements [driver.Valuer].
+func (t DBTime) Value() (driver.Value, error) {
+	if t.Time.IsZero() {
+		return nil, nil
+	}
+
+	return t.Time.Format(time.RFC3339), nil
+}
+
+// Scan implements the [sql.Scanner] interface.
+func (t *DBTime) Scan(value any) error {
+	if value == nil {
+		return nil
+	}
+
+	switch v := value.(type) {
+	case time.Time:
+		t.Time = v
+	case string:
+		// Try to parse in the correct format:
+		parsed, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			return fmt.Errorf("error parsing time format: %s", v)
+		}
+
+		t.Time = parsed
+	default:
+		return fmt.Errorf("unsupported type for Time.Scan: %T", value)
+	}
+
+	return nil
+}

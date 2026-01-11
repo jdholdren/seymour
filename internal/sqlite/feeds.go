@@ -189,7 +189,7 @@ func (r Repo) UpdateFeed(ctx context.Context, id string, args seymour.UpdateFeed
 	if args.Description != "" {
 		q = q.Set("description", args.Description)
 	}
-	if !args.LastSynced.IsZero() {
+	if !args.LastSynced.Time.IsZero() {
 		q = q.Set("last_synced_at", args.LastSynced)
 	}
 	q = q.Where(sq.Eq{"id": id})
@@ -199,7 +199,7 @@ func (r Repo) UpdateFeed(ctx context.Context, id string, args seymour.UpdateFeed
 		return fmt.Errorf("error constructing sql: %s", err)
 	}
 	if _, err := r.db.ExecContext(ctx, query, qArgs...); err != nil {
-		return fmt.Errorf("error executing feed update")
+		return fmt.Errorf("error executing feed update: %s", err)
 	}
 
 	return nil

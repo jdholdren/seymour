@@ -83,7 +83,7 @@ func (s Server) handleViewer(w http.ResponseWriter, r *http.Request) error {
 	return writeJSON(w, http.StatusOK, Viewer{
 		UserID:                usr.ID,
 		Email:                 usr.Email,
-		CreatedAt:             usr.CreatedAt,
+		CreatedAt:             usr.CreatedAt.Time,
 		Prompt:                usr.Prompt,
 		PersonalSubscriptions: viewerSubs,
 	})
