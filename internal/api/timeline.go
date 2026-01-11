@@ -41,8 +41,9 @@ type FeedResp struct {
 
 func apiFeed(f seymour.Feed) FeedResp {
 	var (
-		title string
-		desc  string
+		title      string
+		desc       string
+		lastSynced *time.Time
 	)
 	if f.Title != nil {
 		title = *f.Title
@@ -50,15 +51,18 @@ func apiFeed(f seymour.Feed) FeedResp {
 	if f.Description != nil {
 		desc = *f.Description
 	}
+	if f.LastSyncedAt != nil {
+		lastSynced = &f.LastSyncedAt.Time
+	}
 
 	return FeedResp{
 		ID:           f.ID,
 		Title:        title,
 		URL:          f.URL,
 		Description:  desc,
-		LastSyncedAt: f.LastSyncedAt,
-		CreatedAt:    f.CreatedAt,
-		UpdatedAt:    f.UpdatedAt,
+		LastSyncedAt: lastSynced,
+		CreatedAt:    f.CreatedAt.Time,
+		UpdatedAt:    f.UpdatedAt.Time,
 	}
 }
 
@@ -133,6 +137,7 @@ func (s Server) getSusbcriptions(w http.ResponseWriter, r *http.Request) error {
 		var (
 			feedName        string
 			feedDescription string
+			lastSynced      *time.Time
 		)
 		if feed.Title != nil {
 			feedName = *feed.Title
@@ -140,14 +145,17 @@ func (s Server) getSusbcriptions(w http.ResponseWriter, r *http.Request) error {
 		if feed.Description != nil {
 			feedDescription = *feed.Description
 		}
+		if feed.LastSyncedAt != nil {
+			lastSynced = &feed.LastSyncedAt.Time
+		}
 
 		resp.Subscriptions = append(resp.Subscriptions, SubscriptionResp{
 			ID:              sub.ID,
 			FeedID:          sub.FeedID,
-			CreatedAt:       sub.CreatedAt,
+			CreatedAt:       sub.CreatedAt.Time,
 			FeedName:        feedName,
 			FeedDescription: feedDescription,
-			LastSynced:      feed.LastSyncedAt,
+			LastSynced:      lastSynced,
 		})
 	}
 	return writeJSON(w, http.StatusCreated, resp)
@@ -159,11 +167,12 @@ type TimelineResp struct {
 }
 
 type TimelineEntry struct {
-	EntryID     string `json:"entry_id"`
-	FeedName    string `json:"feed_name"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	URL         string `json:"url"`
+	EntryID     string    `json:"entry_id"`
+	FeedName    string    `json:"feed_name"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	URL         string    `json:"url"`
+	PublishDate time.Time `json:"publish_date"`
 }
 
 // TODO: Take in query params for cursor pagination
@@ -239,6 +248,7 @@ func (s Server) getUserTimeline(w http.ResponseWriter, r *http.Request) error {
 			Title:       feedEntry.Title,
 			Description: feedEntry.Description,
 			URL:         feedEntry.Link,
+			PublishDate: time.Time{},
 		})
 	}
 	return writeJSON(w, http.StatusOK, resp)
@@ -302,7 +312,7 @@ func (s Server) getFeedEntry(w http.ResponseWriter, r *http.Request) error {
 		URL:           entry.Link,
 		Title:         entry.Title,
 		Description:   entry.Description,
-		CreatedAt:     entry.CreatedAt,
+		CreatedAt:     entry.CreatedAt.Time,
 		ReaderContent: contents,
 	}
 	// Add to the cache for next time

@@ -65,12 +65,12 @@ func Feed(ctx context.Context, feedID, feedURL string) (seymour.Feed, []seymour.
 			}
 
 			// Parse the publish date
-			var publishedAt *time.Time
+			var publishedAt seymour.DBTime
 			if parsedTime, err := time.Parse(time.RFC1123, item.PubDate); err == nil {
-				publishedAt = &parsedTime
+				publishedAt.Time = parsedTime
 			}
 			if parsedTime, err := time.Parse(time.RFC1123Z, item.PubDate); err == nil {
-				publishedAt = &parsedTime
+				publishedAt.Time = parsedTime
 			}
 
 			entries = append(entries, seymour.FeedEntry{
