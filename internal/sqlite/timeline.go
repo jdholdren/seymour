@@ -95,7 +95,7 @@ func (r Repo) InsertEntry(ctx context.Context, entry seymour.TimelineEntry) erro
 	return nil
 }
 
-func (r Repo) EntriesNeedingJudgement(ctx context.Context, userID string) ([]seymour.TimelineEntry, error) {
+func (r Repo) EntriesNeedingJudgement(ctx context.Context, userID string, limit uint) ([]seymour.TimelineEntry, error) {
 	const q = `
 	SELECT
 		id,
@@ -106,11 +106,12 @@ func (r Repo) EntriesNeedingJudgement(ctx context.Context, userID string) ([]sey
 	FROM
 		timeline_entries
 	WHERE
-		user_id = ? AND status = ?;
+		user_id = ? AND status = ?
+	LIMIT ?;
 	`
 
 	var entries []seymour.TimelineEntry
-	if err := r.db.SelectContext(ctx, &entries, q, userID, seymour.TimelineEntryStatusRequiresJudgement); err != nil {
+	if err := r.db.SelectContext(ctx, &entries, q, userID, seymour.TimelineEntryStatusRequiresJudgement, limit); err != nil {
 		return nil, fmt.Errorf("error selecting entries needing judgement: %s", err)
 	}
 

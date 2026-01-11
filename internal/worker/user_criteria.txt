@@ -1,0 +1,7 @@
+<CRITERIA>
+%s
+</CRITERIA>
+
+<POSTS>
+%s
+</POSTS>

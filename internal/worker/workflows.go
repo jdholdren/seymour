@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"go.temporal.io/api/enums/v1"
@@ -13,9 +14,13 @@ import (
 	seyerrs "github.com/jdholdren/seymour/internal/errors"
 )
 
+// NOTE: The workflow functions are really just methods hanging off of workflows for namespace
+// organization. I'd like to not have the receivar var in there since it's not used, but Zed's
+// outline feature doesn't detect the methods unless it's present, e.g. (w workflows) not (workflows)
+
 type workflows struct{}
 
-func (workflows) SyncAllFeeds(ctx workflow.Context) error {
+func (w workflows) SyncAllFeeds(ctx workflow.Context) error {
 	options := workflow.ActivityOptions{
 		StartToCloseTimeout: 3 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -90,7 +95,7 @@ func TriggerCreateFeedWorkflow(ctx context.Context, c client.Client, feedURL, us
 // CreateFeed inserts a new feed, tries to sync, and rolls back if it's unable to.
 //
 // Returns the ID of the created feed.
-func (workflows) CreateFeed(ctx workflow.Context, feedURL, userID string) (string, error) {
+func (w workflows) CreateFeed(ctx workflow.Context, feedURL, userID string) (string, error) {
 	options := workflow.ActivityOptions{
 		StartToCloseTimeout: 3 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -139,7 +144,7 @@ func (workflows) CreateFeed(ctx workflow.Context, feedURL, userID string) (strin
 	return feedID, nil
 }
 
-func (workflows) RefreshAllUserTimelines(ctx workflow.Context) error {
+func (w workflows) RefreshAllUserTimelines(ctx workflow.Context) error {
 	options := workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -179,7 +184,7 @@ func (workflows) RefreshAllUserTimelines(ctx workflow.Context) error {
 
 // RefreshUserTimeline syncs any missing entries for the user based on
 // their subscriptions, and then judges their new timeline.
-func (workflows) RefreshUserTimeline(ctx workflow.Context, userID string) error {
+func (w workflows) RefreshUserTimeline(ctx workflow.Context, userID string) error {
 	options := workflow.ActivityOptions{
 		StartToCloseTimeout: 3 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -219,29 +224,60 @@ func (workflows) RefreshUserTimeline(ctx workflow.Context, userID string) error 
 	return nil
 }
 
-func (workflows) JudgeUserTimeline(ctx workflow.Context, userID string) error {
+func (w workflows) JudgeUserTimeline(ctx workflow.Context, userID string) error {
 	options := workflow.ActivityOptions{
-		StartToCloseTimeout: 3 * time.Second,
+		StartToCloseTimeout: 30 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
-			InitialInterval:    time.Second,
-			BackoffCoefficient: 2.0,
-			MaximumAttempts:    3,
+			InitialInterval:        time.Minute,
+			BackoffCoefficient:     2.0,
+			MaximumAttempts:        3,
+			NonRetryableErrorTypes: []string{errTypeInternal},
 		},
 	}
 	ctx = workflow.WithActivityOptions(ctx, options)
 	l := workflow.GetLogger(ctx)
 
-	// Judge entries
-	var j judgements
-	if err := workflow.ExecuteActivity(ctx, acts.JudgeEntries, userID).Get(ctx, &j); err != nil {
-		l.Error("failed to judge entries", "error", err)
+	// User might have a bunch of entries, we may need to loop more than once
+	var entryCount uint
+	if err := workflow.ExecuteActivity(ctx, acts.CountEntriesNeedingJudgement, userID).Get(ctx, &entryCount); err != nil {
+		l.Error("failed to count entries", "error", err)
 		return err
 	}
 
-	// Save the judgements
-	if err := workflow.ExecuteActivity(ctx, acts.MarkEntriesAsJudged, j).Get(ctx, nil); err != nil {
-		l.Error("failed to save judgements", "error", err)
-		return err
+	// If there are no entries to judge, exit early
+	if entryCount == 0 {
+		l.Info("no entries to judge")
+		return nil
+	}
+
+	// Loop at most 3 times based on a claude batch of 20 posts
+	loops := int(math.Min(3, float64(entryCount/20)+1))
+
+	for range loops {
+		// Judge entries
+		var (
+			judgeOptions = workflow.ActivityOptions{
+				StartToCloseTimeout: 30 * time.Second,
+				RetryPolicy: &temporal.RetryPolicy{
+					InitialInterval:        time.Minute,
+					BackoffCoefficient:     2.0,
+					MaximumAttempts:        3,
+					NonRetryableErrorTypes: []string{errTypeInternal},
+				},
+			}
+			judgeCtx = workflow.WithActivityOptions(ctx, judgeOptions)
+			j        judgements
+		)
+		if err := workflow.ExecuteActivity(judgeCtx, acts.JudgeEntries, userID).Get(ctx, &j); err != nil {
+			l.Error("failed to judge entries", "error", err)
+			return err
+		}
+
+		// Save the judgements
+		if err := workflow.ExecuteActivity(ctx, acts.MarkEntriesAsJudged, j).Get(ctx, nil); err != nil {
+			l.Error("failed to save judgements", "error", err)
+			return err
+		}
 	}
 
 	return nil

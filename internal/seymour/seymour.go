@@ -26,7 +26,7 @@ type Repository interface {
 	CreateSubscription(ctx context.Context, userID string, feedID string) error
 	UserSubscriptions(ctx context.Context, userID string) ([]Subscription, error)
 	MissingEntries(ctx context.Context, userID string) ([]MissingEntry, error)
-	EntriesNeedingJudgement(ctx context.Context, userID string) ([]TimelineEntry, error)
+	EntriesNeedingJudgement(ctx context.Context, userID string, limit uint) ([]TimelineEntry, error)
 	InsertEntry(ctx context.Context, entry TimelineEntry) error
 	UpdateTimelineEntry(ctx context.Context, id string, status TimelineEntryStatus) error
 	UserTimelineEntries(ctx context.Context, userID string, args UserTimelineEntriesArgs) ([]TimelineEntry, error)

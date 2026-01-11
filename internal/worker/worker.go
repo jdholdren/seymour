@@ -8,15 +8,17 @@ import (
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/jdholdren/seymour/internal/seymour"
 )
 
 const TaskQueue = "shared"
 
 // NewWorker sets up the worker with registration of workflows, activities, and schedules.
-func NewWorker(ctx context.Context, repo seymour.Repository, cli client.Client) (worker.Worker, error) {
+func NewWorker(ctx context.Context, repo seymour.Repository, cli client.Client, claudeClient *anthropic.Client) (worker.Worker, error) {
 	a := activities{
-		repo: repo,
+		repo:         repo,
+		claudeClient: claudeClient,
 	}
 
 	w := worker.New(cli, TaskQueue, worker.Options{})
@@ -95,3 +97,12 @@ func registerEverything(ctx context.Context, w worker.Worker, a activities, cli 
 
 	return nil
 }
+
+// Error types
+//
+// These are error types in the temporal sense, not the general "go" error types sense.
+// They are used since between activities error types are marshaled and type information is lost.
+const (
+	errTypeInternal  = "internal"
+	errTypeRateLimit = "rateLimit"
+)

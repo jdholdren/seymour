@@ -8,6 +8,8 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/jmoiron/sqlx"
 	"github.com/oklog/run"
 	"github.com/sethvargo/go-envconfig"
@@ -24,6 +26,7 @@ import (
 type config struct {
 	Database         string `env:"DATABASE, required"`
 	TemporalHostPort string `env:"TEMPORAL_HOST_PORT, required"`
+	ClaudeAPIKey     string `env:"CLAUDE_API_KEY"`
 }
 
 func main() {
@@ -65,8 +68,13 @@ func main() {
 		log.Fatalln("Unable to create Temporal client:", err)
 	}
 
+	// Create claude client
+	claudeClient := anthropic.NewClient(
+		option.WithAPIKey(cfg.ClaudeAPIKey),
+	)
+
 	// Create the worker
-	w, err := seyworker.NewWorker(ctx, repo, temporalCli)
+	w, err := seyworker.NewWorker(ctx, repo, temporalCli, &claudeClient)
 	if err != nil {
 		log.Fatalf("Failed to create worker: %v", err)
 	}

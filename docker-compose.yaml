@@ -5,6 +5,7 @@ services:
       dockerfile: ./Dockerfile
       args:
         MAIN_PATH: ./cmd/worker
+    env_file: .env
     environment:
       - DATABASE=/data/citadel/citadel.sqlite
       - TEMPORAL_HOST_PORT=host.docker.internal:7236

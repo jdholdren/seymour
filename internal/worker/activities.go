@@ -7,15 +7,18 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
+	"go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/temporal"
+
 	seyerrs "github.com/jdholdren/seymour/internal/errors"
 	"github.com/jdholdren/seymour/internal/seymour"
 	"github.com/jdholdren/seymour/internal/sync"
-	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/temporal"
 )
 
 type activities struct {
-	repo seymour.Repository
+	repo         seymour.Repository
+	claudeClient *anthropic.Client
 }
 
 // Instance to make the workflow a bit more readable
@@ -130,25 +133,19 @@ func (a activities) InsertMissingTimelineEntries(ctx context.Context, userID str
 	return len(missing), nil
 }
 
+// CountEntriesNeedingJudgement checks the current count of how many entries need judgement for
+// a given user.
+func (a activities) CountEntriesNeedingJudgement(ctx context.Context, userID string) (uint, error) {
+	entries, err := a.repo.EntriesNeedingJudgement(ctx, userID, 1000)
+	if err != nil {
+		return 0, fmt.Errorf("error finding entries needing judgement: %s", err)
+	}
+
+	return uint(len(entries)), nil
+}
+
 // Type that holds a timeline entry ID and whether it has been approved.
 type judgements map[string]bool
-
-// Fetch the entries needing judgement, then send them out
-func (a activities) JudgeEntries(ctx context.Context, userID string) (judgements, error) {
-	// TODO: Send to AI for judgement, if user has an AI configuration
-	entries, err := a.repo.EntriesNeedingJudgement(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("error finding needing judgement timeline entries: %s", err)
-	}
-
-	// For now, just approve all entries
-	j := make(judgements)
-	for _, entry := range entries {
-		j[entry.ID] = true
-	}
-
-	return j, nil
-}
 
 func (a activities) MarkEntriesAsJudged(ctx context.Context, js judgements) error {
 	for timelineEntryID, approved := range js {
