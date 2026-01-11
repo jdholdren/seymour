@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jdholdren/seymour/internal/seymour"
-	"github.com/microcosm-cc/bluemonday"
 	"github.com/sym01/htmlsanitizer"
+
+	"github.com/jdholdren/seymour/internal/seymour"
 )
 
 // Represents a response from an RSS feed fetch.
@@ -26,6 +26,7 @@ type rssFeedResp struct {
 			Links       []string `xml:"link"`
 			GUID        string   `xml:"guid"`
 			Description string   `xml:"description"`
+			PubDate     string   `xml:"pubDate"`
 		} `xml:"item"`
 	} `xml:"channel"`
 }
@@ -53,6 +54,7 @@ func Feed(ctx context.Context, feedID, feedURL string) (seymour.Feed, []seymour.
 	entries := []seymour.FeedEntry{}
 	for _, channel := range feedResp.Channel {
 		for _, item := range channel.Items {
+			// Parse the links to the post
 			var nonEmptyLink string
 			for _, link := range item.Links {
 				if link == "" {
@@ -62,12 +64,22 @@ func Feed(ctx context.Context, feedID, feedURL string) (seymour.Feed, []seymour.
 				nonEmptyLink = link
 			}
 
+			// Parse the publish date
+			var publishedAt *time.Time
+			if parsedTime, err := time.Parse(time.RFC1123, item.PubDate); err == nil {
+				publishedAt = &parsedTime
+			}
+			if parsedTime, err := time.Parse(time.RFC1123Z, item.PubDate); err == nil {
+				publishedAt = &parsedTime
+			}
+
 			entries = append(entries, seymour.FeedEntry{
 				FeedID:      feedID,
 				GUID:        item.GUID,
 				Title:       sanitize(item.Title),
 				Description: sanitize(item.Description),
 				Link:        nonEmptyLink,
+				PublishTime: publishedAt,
 			})
 		}
 	}
@@ -79,8 +91,6 @@ func Feed(ctx context.Context, feedID, feedURL string) (seymour.Feed, []seymour.
 		Description: &feedResp.Channel[0].Description,
 	}, entries, nil
 }
-
-var stripPolicy = bluemonday.StrictPolicy()
 
 // Removes all html tags from the string, usually a description.
 //
