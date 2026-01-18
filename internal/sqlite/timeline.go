@@ -128,7 +128,10 @@ func (r Repo) UpdateTimelineEntry(ctx context.Context, id string, status seymour
 }
 
 func (r Repo) UserTimelineEntries(ctx context.Context, userID string, args seymour.UserTimelineEntriesArgs) ([]seymour.TimelineEntry, error) {
-	q := sq.Select("id", "user_id", "feed_entry_id", "created_at", "status").From("timeline_entries").OrderBy("created_at DESC")
+	q := sq.Select("t.id", "t.user_id", "t.feed_entry_id", "t.created_at", "t.status").
+		From("timeline_entries t").
+		Join("feed_entries fe ON fe.id = t.feed_entry_id").
+		OrderBy("fe.publish_time DESC, t.created_at DESC")
 	where := sq.Eq{
 		"user_id": userID,
 	}
