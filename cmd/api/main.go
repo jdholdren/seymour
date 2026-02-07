@@ -35,7 +35,6 @@ type config struct {
 	GithubClientSecret string `env:"GITHUB_CLIENT_SECRET"`
 	CookieHashKey      string `env:"COOKIE_HASH_KEY"`
 	CookieBlockKey     string `env:"COOKIE_BLOCK_KEY"`
-	DebugEndpoints     bool   `env:"DEBUG_ENDPOINTS, default=false"`
 	Cors               string `env:"CORS"`
 	SSORedirectURL     string `env:"SSO_REDIRECT_URL"`
 }
@@ -91,7 +90,6 @@ func main() {
 		CookieHashKey:      []byte(cfg.CookieHashKey),
 		CookieBlockKey:     []byte(cfg.CookieBlockKey),
 		HttpsCookies:       cfg.HTTPSCookies,
-		DebugEndpoints:     cfg.DebugEndpoints,
 		CorsHeader:         cfg.Cors,
 		SSORedirectURL:     cfg.SSORedirectURL,
 	}

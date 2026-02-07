@@ -44,8 +44,6 @@ type (
 		GithubClientSecret string
 		CorsHeader         string
 		SSORedirectURL     string
-
-		DebugEndpoints bool
 	}
 )
 
@@ -89,11 +87,6 @@ func NewServer(config ServerConfig, repo seymour.Repository, temporalCli client.
 	r.HandleFuncE("/api/sso-login", srvr.handleSSORedirect).Methods(http.MethodGet)
 	r.HandleFuncE("/api/sso-callback", srvr.handleSSOCallback).Methods(http.MethodGet)
 	r.HandleFuncE("/api/logout", srvr.getLogout).Methods(http.MethodGet)
-
-	if config.DebugEndpoints {
-		// For local testing
-		r.HandleFuncE("/api/login", srvr.handleDebugLogin).Methods(http.MethodPost)
-	}
 
 	authed := errRouter{Router: r.NewRoute().Subrouter()}
 	authed.Use(requireSessionMiddleware(srvr.secureCookie))

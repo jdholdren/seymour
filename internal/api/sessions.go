@@ -163,18 +163,3 @@ func (s Server) getLogout(w http.ResponseWriter, r *http.Request) error {
 
 	return nil
 }
-
-type DebugLogin struct {
-	UserID string `json:"user_id"`
-}
-
-func (s Server) handleDebugLogin(w http.ResponseWriter, r *http.Request) error {
-	var body DebugLogin
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		return err
-	}
-
-	// Issue an update to their session so they're logged in
-	setSession(w, s.secureCookie, s.httpsCookies, sessionState{UserID: body.UserID})
-	return nil
-}
