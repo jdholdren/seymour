@@ -138,6 +138,9 @@ func (r Repo) UserTimelineEntries(ctx context.Context, userID string, args seymo
 	if args.Limit > 0 {
 		q = q.Limit(args.Limit)
 	}
+	if args.Offset > 0 {
+		q = q.Offset(args.Offset)
+	}
 	if args.FeedID != "" {
 		q = q.Where("feed_id = ?", args.FeedID)
 	}
@@ -155,4 +158,31 @@ func (r Repo) UserTimelineEntries(ctx context.Context, userID string, args seymo
 	}
 
 	return entries, nil
+}
+
+func (r Repo) CountUserTimelineEntries(ctx context.Context, userID string, args seymour.UserTimelineEntriesArgs) (int, error) {
+	q := sq.Select("COUNT(*)").From("timeline_entries")
+	where := sq.Eq{
+		"user_id": userID,
+	}
+	if args.Status != "" {
+		where["status"] = args.Status
+	}
+	if args.FeedID != "" {
+		q = q.Where("feed_id = ?", args.FeedID)
+	}
+
+	q = q.Where(where)
+
+	query, queryArgs, err := q.ToSql()
+	if err != nil {
+		return 0, fmt.Errorf("error generating SQL query: %s", err)
+	}
+
+	var count int
+	if err := r.db.GetContext(ctx, &count, query, queryArgs...); err != nil {
+		return 0, fmt.Errorf("error counting user timeline entries: %s", err)
+	}
+
+	return count, nil
 }

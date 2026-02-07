@@ -32,6 +32,7 @@ type Repository interface {
 	InsertEntry(ctx context.Context, entry TimelineEntry) error
 	UpdateTimelineEntry(ctx context.Context, id string, status TimelineEntryStatus) error
 	UserTimelineEntries(ctx context.Context, userID string, args UserTimelineEntriesArgs) ([]TimelineEntry, error)
+	CountUserTimelineEntries(ctx context.Context, userID string, args UserTimelineEntriesArgs) (int, error)
 	UpdateUserPrompt(ctx context.Context, userID string, prompt string) error
 
 	// User operations
@@ -113,6 +114,9 @@ type UserTimelineEntriesArgs struct {
 	Status TimelineEntryStatus // To optionally filter by status
 	FeedID string              // To optionally filter by feed
 	Limit  uint64              // To optionally limit the number of entries returned
+
+	// Pagination fields
+	Offset uint64 // Offset for pagination
 }
 
 // TimelineEntryStatus represents the status of a timeline entry.

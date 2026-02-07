@@ -162,8 +162,8 @@ func (s Server) getSusbcriptions(w http.ResponseWriter, r *http.Request) error {
 }
 
 type TimelineResp struct {
-	Items []TimelineEntry `json:"items"`
-	// TODO: Pagination details
+	Items      []TimelineEntry `json:"items"`
+	Pagination paginationMeta  `json:"pagination"`
 }
 
 type TimelineEntry struct {
@@ -175,7 +175,6 @@ type TimelineEntry struct {
 	PublishDate time.Time `json:"publish_date"`
 }
 
-// TODO: Take in query params for cursor pagination
 func (s Server) getUserTimeline(w http.ResponseWriter, r *http.Request) error {
 	var (
 		ctx     = r.Context()
@@ -189,10 +188,23 @@ func (s Server) getUserTimeline(w http.ResponseWriter, r *http.Request) error {
 		return seyerrs.E("not allowed", http.StatusForbidden)
 	}
 
-	tlEnts, err := s.repo.UserTimelineEntries(ctx, userID, seymour.UserTimelineEntriesArgs{
+	// Parse pagination parameters
+	limit, offset := parsePaginationParams(r, 20, 100) // default=20, max=100
+
+	args := seymour.UserTimelineEntriesArgs{
 		Status: seymour.TimelineEntryStatusApproved,
 		FeedID: feedID,
-	})
+		Limit:  uint64(limit),
+		Offset: uint64(offset),
+	}
+
+	// Get count and entries
+	total, err := s.repo.CountUserTimelineEntries(ctx, userID, args)
+	if err != nil {
+		return err
+	}
+
+	tlEnts, err := s.repo.UserTimelineEntries(ctx, userID, args)
 	if err != nil {
 		return err
 	}
@@ -229,9 +241,8 @@ func (s Server) getUserTimeline(w http.ResponseWriter, r *http.Request) error {
 		feedEntriesByID[feedEntry.ID] = feedEntry
 	}
 
-	resp := TimelineResp{
-		Items: make([]TimelineEntry, 0, len(tlEnts)),
-	}
+	// Build timeline entries
+	items := make([]TimelineEntry, 0, len(tlEnts))
 	for _, tlEntry := range tlEnts {
 		var (
 			feedEntry = feedEntriesByID[tlEntry.FeedEntryID]
@@ -242,15 +253,22 @@ func (s Server) getUserTimeline(w http.ResponseWriter, r *http.Request) error {
 			feedTitle = *feed.Title
 		}
 
-		resp.Items = append(resp.Items, TimelineEntry{
+		items = append(items, TimelineEntry{
 			EntryID:     feedEntry.ID,
 			FeedName:    feedTitle,
 			Title:       feedEntry.Title,
 			Description: feedEntry.Description,
 			URL:         feedEntry.Link,
-			PublishDate: time.Time{},
+			PublishDate: feedEntry.PublishTime.Time,
 		})
 	}
+
+	// Build pagination metadata
+	resp := TimelineResp{
+		Items:      items,
+		Pagination: calculatePaginationMeta(limit, offset, total),
+	}
+
 	return writeJSON(w, http.StatusOK, resp)
 }
 
