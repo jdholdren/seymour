@@ -1,10 +1,12 @@
 package sync
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
 	"fmt"
 	"html"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -31,6 +33,28 @@ type rssFeedResp struct {
 	} `xml:"channel"`
 }
 
+// Represents a response from an Atom feed fetch.
+type atomFeedResp struct {
+	XMLName  xml.Name `xml:"feed"`
+	Title    string   `xml:"title"`
+	Subtitle string   `xml:"subtitle"`
+	Links    []struct {
+		Href string `xml:"href,attr"`
+		Rel  string `xml:"rel,attr"`
+	} `xml:"link"`
+	Entries []struct {
+		Title string `xml:"title"`
+		ID    string `xml:"id"`
+		Links []struct {
+			Href string `xml:"href,attr"`
+			Rel  string `xml:"rel,attr"`
+		} `xml:"link"`
+		Summary string `xml:"summary"`
+		Content string `xml:"content"`
+		Updated string `xml:"updated"`
+	} `xml:"entry"`
+}
+
 var syncClient = &http.Client{
 	Timeout: time.Second * 3,
 }
@@ -46,9 +70,42 @@ func Feed(ctx context.Context, feedID, feedURL string) (seymour.Feed, []seymour.
 		return seymour.Feed{}, nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return seymour.Feed{}, nil, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	// Detect feed format based on the root XML element
+	format := detectFormat(body)
+	switch format {
+	case "atom":
+		return parseAtom(feedID, body)
+	default:
+		return parseRSS(feedID, body)
+	}
+}
+
+// detectFormat peeks at the root XML element to determine if the feed is RSS or Atom.
+func detectFormat(data []byte) string {
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	for {
+		tok, err := decoder.Token()
+		if err != nil {
+			return "rss"
+		}
+		if se, ok := tok.(xml.StartElement); ok {
+			if se.Name.Local == "feed" {
+				return "atom"
+			}
+			return "rss"
+		}
+	}
+}
+
+func parseRSS(feedID string, data []byte) (seymour.Feed, []seymour.FeedEntry, error) {
 	var feedResp rssFeedResp
-	if err := xml.NewDecoder(resp.Body).Decode(&feedResp); err != nil {
-		return seymour.Feed{}, nil, fmt.Errorf("error decoding feed: %w", err)
+	if err := xml.NewDecoder(bytes.NewReader(data)).Decode(&feedResp); err != nil {
+		return seymour.Feed{}, nil, fmt.Errorf("error decoding rss feed: %w", err)
 	}
 
 	entries := []seymour.FeedEntry{}
@@ -89,6 +146,55 @@ func Feed(ctx context.Context, feedID, feedURL string) (seymour.Feed, []seymour.
 		ID:          feedID,
 		Title:       &feedResp.Channel[0].Title,
 		Description: &feedResp.Channel[0].Description,
+	}, entries, nil
+}
+
+func parseAtom(feedID string, data []byte) (seymour.Feed, []seymour.FeedEntry, error) {
+	var feedResp atomFeedResp
+	if err := xml.NewDecoder(bytes.NewReader(data)).Decode(&feedResp); err != nil {
+		return seymour.Feed{}, nil, fmt.Errorf("error decoding atom feed: %w", err)
+	}
+
+	entries := []seymour.FeedEntry{}
+	for _, entry := range feedResp.Entries {
+		// Find the best link: prefer "alternate", fall back to first with href
+		var link string
+		for _, l := range entry.Links {
+			if l.Href == "" {
+				continue
+			}
+			if link == "" || l.Rel == "alternate" {
+				link = l.Href
+			}
+		}
+
+		// Use content if summary is empty
+		description := entry.Summary
+		if description == "" {
+			description = entry.Content
+		}
+
+		// Parse the publish date (Atom uses RFC3339)
+		var publishedAt seymour.DBTime
+		if parsedTime, err := time.Parse(time.RFC3339, entry.Updated); err == nil {
+			publishedAt.Time = parsedTime
+		}
+
+		entries = append(entries, seymour.FeedEntry{
+			FeedID:      feedID,
+			GUID:        entry.ID,
+			Title:       sanitize(entry.Title),
+			Description: sanitize(description),
+			Link:        link,
+			PublishTime: publishedAt,
+		})
+	}
+
+	subtitle := feedResp.Subtitle
+	return seymour.Feed{
+		ID:          feedID,
+		Title:       &feedResp.Title,
+		Description: &subtitle,
 	}, entries, nil
 }
 
