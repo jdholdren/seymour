@@ -70,11 +70,11 @@ func (w workflows) SyncAllFeeds(ctx workflow.Context) error {
 	return nil
 }
 
-func TriggerCreateFeedWorkflow(ctx context.Context, c client.Client, feedURL, userID string) (string, error) {
+func TriggerCreateFeedWorkflow(ctx context.Context, c client.Client, feedURL string) (string, error) {
 	options := client.StartWorkflowOptions{
 		TaskQueue: TaskQueue,
 	}
-	we, err := c.ExecuteWorkflow(ctx, options, workflows{}.CreateFeed, feedURL, userID)
+	we, err := c.ExecuteWorkflow(ctx, options, workflows{}.CreateFeed, feedURL)
 	if err != nil {
 		return "", fmt.Errorf("unable to execute workflow: %s", err)
 	}
@@ -95,7 +95,7 @@ func TriggerCreateFeedWorkflow(ctx context.Context, c client.Client, feedURL, us
 // CreateFeed inserts a new feed, tries to sync, and rolls back if it's unable to.
 //
 // Returns the ID of the created feed.
-func (w workflows) CreateFeed(ctx workflow.Context, feedURL, userID string) (string, error) {
+func (w workflows) CreateFeed(ctx workflow.Context, feedURL string) (string, error) {
 	options := workflow.ActivityOptions{
 		StartToCloseTimeout: 3 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -128,15 +128,15 @@ func (w workflows) CreateFeed(ctx workflow.Context, feedURL, userID string) (str
 		return "", err
 	}
 
-	// Trigger a refresh of that user's timeline
+	// Trigger a refresh of the timeline
 	ctx = workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
 		// Ensure only one judgement at a time, allow current one to process
-		WorkflowID:            "refresh-user-timeline-" + userID,
+		WorkflowID:            "refresh-timeline",
 		WorkflowIDReusePolicy: enums.WORKFLOW_ID_REUSE_POLICY_TERMINATE_IF_RUNNING,
 		ParentClosePolicy:     enums.PARENT_CLOSE_POLICY_ABANDON,
 		TaskQueue:             TaskQueue,
 	})
-	if err := workflow.ExecuteChildWorkflow(ctx, workflows.RefreshUserTimeline, userID).GetChildWorkflowExecution().Get(ctx, nil); err != nil {
+	if err := workflow.ExecuteChildWorkflow(ctx, workflows.RefreshTimeline).GetChildWorkflowExecution().Get(ctx, nil); err != nil {
 		l.Error("failed to start child workflow", "error", err)
 		return "", err
 	}
@@ -144,47 +144,9 @@ func (w workflows) CreateFeed(ctx workflow.Context, feedURL, userID string) (str
 	return feedID, nil
 }
 
-func (w workflows) RefreshAllUserTimelines(ctx workflow.Context) error {
-	options := workflow.ActivityOptions{
-		StartToCloseTimeout: 30 * time.Second,
-		RetryPolicy: &temporal.RetryPolicy{
-			MaximumAttempts: 1,
-		},
-	}
-	ctx = workflow.WithActivityOptions(ctx, options)
-	l := workflow.GetLogger(ctx)
-
-	// Get all user ids
-	var userIDs []string
-	if err := workflow.ExecuteActivity(ctx, acts.AllUserIDs).Get(ctx, &userIDs); err != nil {
-		return err
-	}
-
-	l.Info("starting user timeline refresh", "total_users", len(userIDs))
-
-	// Process users with controlled concurrency to avoid overwhelming Temporal
-	wg := workflow.NewWaitGroup(ctx)
-	wg.Add(len(userIDs))
-	for _, id := range userIDs {
-		workflow.Go(ctx, func(ctx workflow.Context) {
-			childCtx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
-				ParentClosePolicy: enums.PARENT_CLOSE_POLICY_ABANDON,
-			})
-			if err := workflow.ExecuteChildWorkflow(childCtx, workflows.RefreshUserTimeline, id).GetChildWorkflowExecution().Get(ctx, nil); err != nil {
-				l.Error("failed to refresh user timeline", "error", err)
-			}
-			wg.Done()
-		})
-	}
-
-	wg.Wait(ctx)
-	l.Info("completed user timeline refresh", "total_users", len(userIDs))
-	return nil
-}
-
-// RefreshUserTimeline syncs any missing entries for the user based on
-// their subscriptions, and then judges their new timeline.
-func (w workflows) RefreshUserTimeline(ctx workflow.Context, userID string) error {
+// RefreshTimeline syncs any missing entries based on
+// subscriptions, and then judges the timeline.
+func (w workflows) RefreshTimeline(ctx workflow.Context) error {
 	options := workflow.ActivityOptions{
 		StartToCloseTimeout: 3 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -197,7 +159,7 @@ func (w workflows) RefreshUserTimeline(ctx workflow.Context, userID string) erro
 	l := workflow.GetLogger(ctx)
 
 	var missingEntryCount int
-	if err := workflow.ExecuteActivity(ctx, acts.InsertMissingTimelineEntries, userID).Get(ctx, &missingEntryCount); err != nil {
+	if err := workflow.ExecuteActivity(ctx, acts.InsertMissingTimelineEntries).Get(ctx, &missingEntryCount); err != nil {
 		l.Error("failed to insert missing timeline entries", "error", err)
 		return err
 	}
@@ -208,15 +170,15 @@ func (w workflows) RefreshUserTimeline(ctx workflow.Context, userID string) erro
 		return nil
 	}
 
-	// Start child workflow to judge the user's timeline
+	// Start child workflow to judge the timeline
 	ctx = workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
 		// Ensure only one judgement at a time, allow current one to process
-		WorkflowID:            "judge-user-timeline-" + userID,
+		WorkflowID:            "judge-timeline",
 		WorkflowIDReusePolicy: enums.WORKFLOW_ID_REUSE_POLICY_TERMINATE_IF_RUNNING,
 		ParentClosePolicy:     enums.PARENT_CLOSE_POLICY_ABANDON,
 		TaskQueue:             TaskQueue,
 	})
-	if err := workflow.ExecuteChildWorkflow(ctx, workflows.JudgeUserTimeline, userID).GetChildWorkflowExecution().Get(ctx, nil); err != nil {
+	if err := workflow.ExecuteChildWorkflow(ctx, workflows.JudgeTimeline).GetChildWorkflowExecution().Get(ctx, nil); err != nil {
 		l.Error("failed to start child workflow", "error", err)
 		return err
 	}
@@ -224,7 +186,7 @@ func (w workflows) RefreshUserTimeline(ctx workflow.Context, userID string) erro
 	return nil
 }
 
-func (w workflows) JudgeUserTimeline(ctx workflow.Context, userID string) error {
+func (w workflows) JudgeTimeline(ctx workflow.Context) error {
 	options := workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -237,9 +199,9 @@ func (w workflows) JudgeUserTimeline(ctx workflow.Context, userID string) error 
 	ctx = workflow.WithActivityOptions(ctx, options)
 	l := workflow.GetLogger(ctx)
 
-	// User might have a bunch of entries, we may need to loop more than once
+	// Timeline might have a bunch of entries, we may need to loop more than once
 	var entryCount uint
-	if err := workflow.ExecuteActivity(ctx, acts.CountEntriesNeedingJudgement, userID).Get(ctx, &entryCount); err != nil {
+	if err := workflow.ExecuteActivity(ctx, acts.CountEntriesNeedingJudgement).Get(ctx, &entryCount); err != nil {
 		l.Error("failed to count entries", "error", err)
 		return err
 	}
@@ -268,7 +230,7 @@ func (w workflows) JudgeUserTimeline(ctx workflow.Context, userID string) error 
 			judgeCtx = workflow.WithActivityOptions(ctx, judgeOptions)
 			j        judgements
 		)
-		if err := workflow.ExecuteActivity(judgeCtx, acts.JudgeEntries, userID).Get(ctx, &j); err != nil {
+		if err := workflow.ExecuteActivity(judgeCtx, acts.JudgeEntries).Get(ctx, &j); err != nil {
 			l.Error("failed to judge entries", "error", err)
 			return err
 		}

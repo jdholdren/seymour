@@ -23,20 +23,15 @@ import (
 	"github.com/jdholdren/seymour/internal/logger"
 	"github.com/jdholdren/seymour/internal/migrations"
 	seyqlite "github.com/jdholdren/seymour/internal/sqlite"
+	"github.com/jdholdren/seymour/internal/worker"
 )
 
 type config struct {
 	Database         string `env:"DATABASE, required"`
 	TemporalHostPort string `env:"TEMPORAL_HOST_PORT, required"`
 
-	Port               int    `env:"PORT, default=4444"`
-	HTTPSCookies       bool   `env:"HTTPS_COOKIES, default=false"`
-	GithubClientID     string `env:"GITHUB_CLIENT_ID"`
-	GithubClientSecret string `env:"GITHUB_CLIENT_SECRET"`
-	CookieHashKey      string `env:"COOKIE_HASH_KEY"`
-	CookieBlockKey     string `env:"COOKIE_BLOCK_KEY"`
-	Cors               string `env:"CORS"`
-	SSORedirectURL     string `env:"SSO_REDIRECT_URL"`
+	Port int    `env:"PORT, default=4444"`
+	Cors string `env:"CORS"`
 }
 
 func main() {
@@ -82,16 +77,16 @@ func main() {
 		log.Fatalln("Unable to create Temporal client:", err)
 	}
 
+	// Ensure that the default queue is there:
+	// Ensure that the default queue is there:
+	if err := worker.EnsureDefaultNamespace(ctx, temporalCli.WorkflowService()); err != nil {
+		log.Fatalln("error ensuring default namespace:", err)
+	}
+
 	// Create and start the server
 	serverConfig := api.ServerConfig{
-		Port:               cfg.Port,
-		GithubClientID:     cfg.GithubClientID,
-		GithubClientSecret: cfg.GithubClientSecret,
-		CookieHashKey:      []byte(cfg.CookieHashKey),
-		CookieBlockKey:     []byte(cfg.CookieBlockKey),
-		HttpsCookies:       cfg.HTTPSCookies,
-		CorsHeader:         cfg.Cors,
-		SSORedirectURL:     cfg.SSORedirectURL,
+		Port:       cfg.Port,
+		CorsHeader: cfg.Cors,
 	}
 
 	server := api.NewServer(serverConfig, repo, temporalCli)

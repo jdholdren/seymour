@@ -105,23 +105,22 @@ func (a activities) RemoveFeed(ctx context.Context, feedID string) error {
 	return nil
 }
 
-// Inserts timeline entries that should be present in a user's timeline based on subscription but are missing.
+// Inserts timeline entries that should be present in the timeline based on subscriptions but are missing.
 //
 // Returns number of missing entries inserted.
-func (a activities) InsertMissingTimelineEntries(ctx context.Context, userID string) (int, error) {
+func (a activities) InsertMissingTimelineEntries(ctx context.Context) (int, error) {
 	l := activity.GetLogger(ctx)
 
-	missing, err := a.repo.MissingEntries(ctx, userID)
+	missing, err := a.repo.MissingEntries(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("error finding missing timeline entries: %s", err)
 	}
 
 	l.Info("searched for missing timeline entries", "length", len(missing))
 
-	// Keep track of affected users
+	// Keep track of affected entries
 	for _, m := range missing {
 		if err := a.repo.InsertEntry(ctx, seymour.TimelineEntry{
-			UserID:      m.UserID,
 			FeedEntryID: m.FeedEntryID,
 			Status:      seymour.TimelineEntryStatusRequiresJudgement,
 			FeedID:      m.FeedID,
@@ -133,10 +132,9 @@ func (a activities) InsertMissingTimelineEntries(ctx context.Context, userID str
 	return len(missing), nil
 }
 
-// CountEntriesNeedingJudgement checks the current count of how many entries need judgement for
-// a given user.
-func (a activities) CountEntriesNeedingJudgement(ctx context.Context, userID string) (uint, error) {
-	entries, err := a.repo.EntriesNeedingJudgement(ctx, userID, 1000)
+// CountEntriesNeedingJudgement checks the current count of how many entries need judgement.
+func (a activities) CountEntriesNeedingJudgement(ctx context.Context) (uint, error) {
+	entries, err := a.repo.EntriesNeedingJudgement(ctx, 1000)
 	if err != nil {
 		return 0, fmt.Errorf("error finding entries needing judgement: %s", err)
 	}
@@ -162,6 +160,7 @@ func (a activities) MarkEntriesAsJudged(ctx context.Context, js judgements) erro
 	return nil
 }
 
+// AllUserIDs is no longer needed in single-tenant mode, return empty slice
 func (a activities) AllUserIDs(ctx context.Context) ([]string, error) {
-	return a.repo.AllUserIDs(ctx)
+	return []string{}, nil
 }

@@ -6,14 +6,12 @@ require github.com/sethvargo/go-envconfig v1.1.1
 
 require (
 	github.com/Masterminds/squirrel v1.5.4
-	github.com/TwiN/go-away v1.8.1
 	github.com/anthropics/anthropic-sdk-go v1.19.0
 	github.com/go-shiori/go-readability v0.0.0-20250217085726-9f5bf5ca7612
 	github.com/golang-migrate/migrate/v4 v4.18.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/handlers v1.4.2
 	github.com/gorilla/mux v1.7.4
-	github.com/gorilla/securecookie v1.1.2
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/oklog/run v1.2.0
@@ -23,7 +21,7 @@ require (
 	go.temporal.io/api v1.46.0
 	go.temporal.io/sdk v1.34.0
 	golang.org/x/crypto/x509roots/fallback v0.0.0-20250515174705-ebc8e4631531
-	golang.org/x/oauth2 v0.30.0
+	google.golang.org/protobuf v1.36.5
 	modernc.org/sqlite v1.18.1
 )
 
@@ -64,7 +62,6 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20240827150818-7e3bb234dfed // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240827150818-7e3bb234dfed // indirect
 	google.golang.org/grpc v1.66.0 // indirect
-	google.golang.org/protobuf v1.36.5 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/uint128 v1.2.0 // indirect
 	modernc.org/cc/v3 v3.36.3 // indirect

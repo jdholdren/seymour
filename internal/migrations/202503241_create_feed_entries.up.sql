@@ -1,8 +1,0 @@
-CREATE TABLE feed_entries (
-	id TEXT PRIMARY KEY,
-	feed_id TEXT NOT NULL,
-	title TEXT NOT NULL,
-	description TEXT NOT NULL,
-	guid TEXT NOT NULL UNIQUE,
-	created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);

@@ -69,7 +69,6 @@ func apiFeed(f seymour.Feed) FeedResp {
 func (s Server) postSusbcriptions(w http.ResponseWriter, r *http.Request) error {
 	var (
 		ctx  = r.Context()
-		sess = session(r, s.secureCookie)
 		body PostSubscriptionReq
 	)
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -80,7 +79,7 @@ func (s Server) postSusbcriptions(w http.ResponseWriter, r *http.Request) error 
 	}
 
 	// Start the workflow to create it and verify it
-	feedID, err := worker.TriggerCreateFeedWorkflow(ctx, s.tempCli, body.FeedURL, sess.UserID)
+	feedID, err := worker.TriggerCreateFeedWorkflow(ctx, s.tempCli, body.FeedURL)
 	var seyErr *seyerrs.Error
 	if errors.As(err, &seyErr) {
 		return seyErr
@@ -93,8 +92,8 @@ func (s Server) postSusbcriptions(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 
-	// Add the feed to the user's subscriptions
-	if err := s.repo.CreateSubscription(ctx, sess.UserID, feed.ID); err != nil {
+	// Add the feed to the subscriptions
+	if err := s.repo.CreateSubscription(ctx, feed.ID); err != nil {
 		return err
 	}
 
@@ -116,11 +115,10 @@ type SubscriptionListResp struct {
 
 func (s Server) getSusbcriptions(w http.ResponseWriter, r *http.Request) error {
 	var (
-		ctx  = r.Context()
-		sess = session(r, s.secureCookie)
+		ctx = r.Context()
 	)
 
-	subs, err := s.repo.UserSubscriptions(ctx, sess.UserID)
+	subs, err := s.repo.AllSubscriptions(ctx)
 	if err != nil {
 		return err
 	}
@@ -175,23 +173,16 @@ type TimelineEntry struct {
 	PublishDate time.Time `json:"publish_date"`
 }
 
-func (s Server) getUserTimeline(w http.ResponseWriter, r *http.Request) error {
+func (s Server) getTimeline(w http.ResponseWriter, r *http.Request) error {
 	var (
-		ctx     = r.Context()
-		session = session(r, s.secureCookie)
-		userID  = mux.Vars(r)["userID"]
-		feedID  = r.URL.Query().Get("feed_id")
+		ctx    = r.Context()
+		feedID = r.URL.Query().Get("feed_id")
 	)
-
-	// Only let the current user see their own timeline
-	if session.UserID != userID {
-		return seyerrs.E("not allowed", http.StatusForbidden)
-	}
 
 	// Parse pagination parameters
 	limit, offset := parsePaginationParams(r, 20, 100) // default=20, max=100
 
-	args := seymour.UserTimelineEntriesArgs{
+	args := seymour.TimelineEntriesArgs{
 		Status: seymour.TimelineEntryStatusApproved,
 		FeedID: feedID,
 		Limit:  uint64(limit),
@@ -199,12 +190,12 @@ func (s Server) getUserTimeline(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	// Get count and entries
-	total, err := s.repo.CountUserTimelineEntries(ctx, userID, args)
+	total, err := s.repo.CountTimelineEntries(ctx, args)
 	if err != nil {
 		return err
 	}
 
-	tlEnts, err := s.repo.UserTimelineEntries(ctx, userID, args)
+	tlEnts, err := s.repo.TimelineEntries(ctx, args)
 	if err != nil {
 		return err
 	}

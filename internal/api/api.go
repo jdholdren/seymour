@@ -11,13 +11,10 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-	"github.com/gorilla/securecookie"
 	lru "github.com/hashicorp/golang-lru/v2"
 	seyerrs "github.com/jdholdren/seymour/internal/errors"
 	"github.com/jdholdren/seymour/internal/seymour"
 	"go.temporal.io/sdk/client"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/github"
 )
 
 func writeJSON(w http.ResponseWriter, status int, data any) error {
@@ -92,22 +89,11 @@ type (
 
 		repo    seymour.Repository
 		tempCli client.Client
-
-		ghOauthConfig  oauth2.Config
-		secureCookie   *securecookie.SecureCookie
-		httpsCookies   bool   // Whether or not HTTPS should be used for cookies
-		ssoRedirectURL string // URL to redirect to after successful SSO login
 	}
 
 	ServerConfig struct {
-		Port               int
-		CookieHashKey      []byte
-		CookieBlockKey     []byte
-		HttpsCookies       bool
-		GithubClientID     string
-		GithubClientSecret string
-		CorsHeader         string
-		SSORedirectURL     string
+		Port       int
+		CorsHeader string
 	}
 )
 
@@ -122,17 +108,8 @@ func NewServer(config ServerConfig, repo seymour.Repository, temporalCli client.
 			Timeout: 2 * time.Second,
 		},
 		entryRespCache: cache,
-		secureCookie:   securecookie.New(config.CookieHashKey, config.CookieBlockKey),
-		httpsCookies:   config.HttpsCookies,
-		ssoRedirectURL: config.SSORedirectURL,
-		ghOauthConfig: oauth2.Config{
-			ClientID:     config.GithubClientID,
-			ClientSecret: config.GithubClientSecret,
-			Scopes:       []string{},
-			Endpoint:     github.Endpoint,
-		},
-		repo:    repo,
-		tempCli: temporalCli,
+		repo:           repo,
+		tempCli:        temporalCli,
 		Server: &http.Server{
 			Addr:         fmt.Sprintf(":%d", config.Port),
 			ReadTimeout:  5 * time.Second,
@@ -140,38 +117,28 @@ func NewServer(config ServerConfig, repo seymour.Repository, temporalCli client.
 			Handler: handlers.CORS(
 				handlers.AllowedOrigins([]string{config.CorsHeader}),
 				handlers.AllowCredentials(),
-				handlers.AllowedMethods([]string{http.MethodGet, http.MethodPost, http.MethodOptions}),
+				handlers.AllowedMethods([]string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodOptions}),
 				handlers.AllowedHeaders([]string{"content-type"}),
 			)(r),
 		},
 	}
 
-	r.Use(AccessLogMiddleware) // Log everything
+	r.Use(accessLogMiddleware) // Log everything
 	r.HandleFuncE("/api/viewer", srvr.handleViewer).Methods(http.MethodGet)
-	r.HandleFuncE("/api/sso-login", srvr.handleSSORedirect).Methods(http.MethodGet)
-	r.HandleFuncE("/api/sso-callback", srvr.handleSSOCallback).Methods(http.MethodGet)
-	r.HandleFuncE("/api/logout", srvr.getLogout).Methods(http.MethodGet)
 
-	authed := errRouter{Router: r.NewRoute().Subrouter()}
-	authed.Use(requireSessionMiddleware(srvr.secureCookie))
+	// Prompt management
+	r.HandleFuncE("/api/prompt", srvr.getPrompt).Methods(http.MethodGet)
+	r.HandleFuncE("/api/prompt", srvr.setPrompt).Methods(http.MethodPut)
 
 	// Subscription management
-	//
-	// TODO: Make these specific to a user
-	authed.HandleFuncE("/api/subscriptions", srvr.postSusbcriptions).Methods(http.MethodPost)
-	authed.HandleFuncE("/api/subscriptions", srvr.getSusbcriptions).Methods(http.MethodGet)
+	r.HandleFuncE("/api/subscriptions", srvr.postSusbcriptions).Methods(http.MethodPost)
+	r.HandleFuncE("/api/subscriptions", srvr.getSusbcriptions).Methods(http.MethodGet)
 
 	// Timeline view
-	authed.HandleFuncE("/api/users/{userID}/timeline", srvr.getUserTimeline).Methods(http.MethodGet)
+	r.HandleFuncE("/api/timeline", srvr.getTimeline).Methods(http.MethodGet)
 
 	// Reader view
-	authed.HandleFuncE("/api/feed-entries/{feedEntryID}", srvr.getFeedEntry).Methods(http.MethodGet)
-
-	// Accout management
-	authed.HandleFuncE("/api/account/prompt:precheck", srvr.postPromptPrecheck).Methods(http.MethodPost)
-	authed.HandleFuncE("/api/account/prompt", srvr.postPrompt).Methods(http.MethodPost)
-
-	slog.Debug("configured citadel server", "port", config.Port)
+	r.HandleFuncE("/api/feed-entries/{feedEntryID}", srvr.getFeedEntry).Methods(http.MethodGet)
 
 	return &srvr
 }

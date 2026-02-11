@@ -20,6 +20,7 @@ import (
 
 	"github.com/jdholdren/seymour/internal/logger"
 	seyqlite "github.com/jdholdren/seymour/internal/sqlite"
+	"github.com/jdholdren/seymour/internal/worker"
 	seyworker "github.com/jdholdren/seymour/internal/worker"
 )
 
@@ -66,6 +67,11 @@ func main() {
 		return nil
 	}); err != nil {
 		log.Fatalln("Unable to create Temporal client:", err)
+	}
+
+	// Ensure that the default queue is there:
+	if err := worker.EnsureDefaultNamespace(ctx, temporalCli.WorkflowService()); err != nil {
+		log.Fatalln("error ensuring default namespace:", err)
 	}
 
 	// Create claude client

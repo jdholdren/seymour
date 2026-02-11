@@ -3,7 +3,6 @@ package errors
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 )
 
@@ -20,7 +19,7 @@ type Detail struct {
 }
 
 func (e *Error) Error() string {
-	return fmt.Sprintf("%d: %s, details: %v", e.Status, e.Err, e.Details)
+	return e.Err.Error()
 }
 
 type transport struct {

@@ -24,22 +24,27 @@ type Repository interface {
 	InsertEntries(ctx context.Context, entries []FeedEntry) error
 	UpdateFeed(ctx context.Context, id string, args UpdateFeedArgs) error
 
+	// Prompt operations
+	ActivePrompt(ctx context.Context) (*Prompt, error)
+	SetPrompt(ctx context.Context, content string) (Prompt, error)
+
 	// Timeline operations
-	CreateSubscription(ctx context.Context, userID string, feedID string) error
-	UserSubscriptions(ctx context.Context, userID string) ([]Subscription, error)
-	MissingEntries(ctx context.Context, userID string) ([]MissingEntry, error)
-	EntriesNeedingJudgement(ctx context.Context, userID string, limit uint) ([]TimelineEntry, error)
+	CreateSubscription(ctx context.Context, feedID string) error
+	AllSubscriptions(ctx context.Context) ([]Subscription, error)
+	MissingEntries(ctx context.Context) ([]MissingEntry, error)
+	EntriesNeedingJudgement(ctx context.Context, limit uint) ([]TimelineEntry, error)
 	InsertEntry(ctx context.Context, entry TimelineEntry) error
 	UpdateTimelineEntry(ctx context.Context, id string, status TimelineEntryStatus) error
-	UserTimelineEntries(ctx context.Context, userID string, args UserTimelineEntriesArgs) ([]TimelineEntry, error)
-	CountUserTimelineEntries(ctx context.Context, userID string, args UserTimelineEntriesArgs) (int, error)
-	UpdateUserPrompt(ctx context.Context, userID string, prompt string) error
+	TimelineEntries(ctx context.Context, args TimelineEntriesArgs) ([]TimelineEntry, error)
+	CountTimelineEntries(ctx context.Context, args TimelineEntriesArgs) (int, error)
+}
 
-	// User operations
-	EnsureUser(ctx context.Context, usr User) (User, error)
-	User(ctx context.Context, id string) (User, error)
-	UserByGithubID(ctx context.Context, githubID string) (User, error)
-	AllUserIDs(ctx context.Context) ([]string, error)
+// Prompt represents a curation prompt for AI-based feed judging.
+type Prompt struct {
+	ID        string `db:"id"`
+	Content   string `db:"content"`
+	Active    bool   `db:"active"`
+	CreatedAt DBTime `db:"created_at"`
 }
 
 // Feed represents an RSS feed's details.
@@ -72,28 +77,16 @@ type UpdateFeedArgs struct {
 	LastSynced  DBTime
 }
 
-// User represents a user in the system.
-type User struct {
-	ID        string `db:"id"`
-	GithubID  string `db:"github_id"`
-	Email     string `db:"email"`
-	Prompt    string `db:"prompt"`
-	CreatedAt DBTime `db:"created_at"`
-	UpdatedAt DBTime `db:"updated_at"`
-}
-
-// Subscription represents a user's subscription to a feed.
+// Subscription represents a subscription to a feed.
 type Subscription struct {
 	ID        string `db:"id"`
-	UserID    string `db:"user_id"`
 	FeedID    string `db:"feed_id"`
 	CreatedAt DBTime `db:"created_at"`
 }
 
-// TimelineEntry represents an entry in a user's timeline.
+// TimelineEntry represents an entry in the timeline.
 type TimelineEntry struct {
 	ID          string `db:"id"`
-	UserID      string `db:"user_id"`
 	FeedEntryID string `db:"feed_entry_id"`
 	CreatedAt   DBTime `db:"created_at"`
 	FeedID      string `db:"feed_id"`
@@ -102,15 +95,14 @@ type TimelineEntry struct {
 	Status TimelineEntryStatus `db:"status"`
 }
 
-// MissingEntry is an instance where a user should have gotten the feed entry put into their timeline.
+// MissingEntry is an instance where a feed entry should have been added to the timeline.
 type MissingEntry struct {
 	FeedEntryID string `db:"feed_entry_id"`
 	FeedID      string `db:"feed_id"`
-	UserID      string `db:"user_id"`
 }
 
-// UserTimelineEntriesArgs holds arguments for filtering user timeline entries.
-type UserTimelineEntriesArgs struct {
+// TimelineEntriesArgs holds arguments for filtering timeline entries.
+type TimelineEntriesArgs struct {
 	Status TimelineEntryStatus // To optionally filter by status
 	FeedID string              // To optionally filter by feed
 	Limit  uint64              // To optionally limit the number of entries returned

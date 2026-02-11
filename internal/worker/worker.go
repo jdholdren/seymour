@@ -35,9 +35,8 @@ func registerEverything(ctx context.Context, w worker.Worker, a activities, cli 
 	wfs := workflows{}
 	w.RegisterWorkflow(wfs.SyncAllFeeds)
 	w.RegisterWorkflow(wfs.CreateFeed)
-	w.RegisterWorkflow(wfs.RefreshUserTimeline)
-	w.RegisterWorkflow(wfs.JudgeUserTimeline)
-	w.RegisterWorkflow(wfs.RefreshAllUserTimelines)
+	w.RegisterWorkflow(wfs.RefreshTimeline)
+	w.RegisterWorkflow(wfs.JudgeTimeline)
 
 	// Activities
 	w.RegisterActivity(&a)
@@ -79,7 +78,7 @@ func registerEverything(ctx context.Context, w worker.Worker, a activities, cli 
 			},
 			Action: &client.ScheduleWorkflowAction{
 				ID:        "refresh_timelines",
-				Workflow:  wfs.RefreshAllUserTimelines, // TODO: Refresh all user timelines
+				Workflow:  wfs.RefreshTimeline,
 				TaskQueue: TaskQueue,
 			},
 		})

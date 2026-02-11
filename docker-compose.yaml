@@ -26,10 +26,7 @@ services:
       - DATABASE=/data/citadel/citadel.sqlite
       - TEMPORAL_HOST_PORT=host.docker.internal:7236
       - PORT=4444
-      - HTTPS_COOKIES=false
-      - DEBUG_ENDPOINTS=true
       - CORS=http://localhost:3000
-      - SSO_REDIRECT_URL=http://localhost:3000
     volumes:
       - ./data/citadel:/data/citadel
     depends_on:
