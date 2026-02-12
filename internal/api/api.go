@@ -12,9 +12,10 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	lru "github.com/hashicorp/golang-lru/v2"
+	"go.temporal.io/sdk/client"
+
 	seyerrs "github.com/jdholdren/seymour/internal/errors"
 	"github.com/jdholdren/seymour/internal/seymour"
-	"go.temporal.io/sdk/client"
 )
 
 func writeJSON(w http.ResponseWriter, status int, data any) error {
@@ -47,10 +48,10 @@ func decodeValid[V validator](r io.Reader) (V, error) {
 	return v, nil
 }
 
-// HandlerFuncE is a modified type of [http.HandlerFunc] that returns an error.
-type HandlerFuncE func(w http.ResponseWriter, r *http.Request) error
+// handlerFuncE is a modified type of [http.HandlerFunc] that returns an error.
+type handlerFuncE func(w http.ResponseWriter, r *http.Request) error
 
-func (f HandlerFuncE) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (f handlerFuncE) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	err := f(w, r)
 	if err == nil {
 		slog.Info("no error coming back")
@@ -74,30 +75,24 @@ type errRouter struct {
 	*mux.Router
 }
 
-func (r errRouter) HandleFuncE(path string, f HandlerFuncE) *mux.Route {
+func (r errRouter) HandleFuncE(path string, f handlerFuncE) *mux.Route {
 	return r.Handle(path, f)
 }
 
-type (
-	// Server is an instance of the aggregation server and handles requests
-	// to search feeds or add new ones for ingestion.
-	Server struct {
-		*http.Server
+// Server is an instance of the aggregation server and handles requests
+// to search feeds or add new ones for ingestion.
+type Server struct {
+	*http.Server
 
-		fetchClient    *http.Client
-		entryRespCache *lru.Cache[string, FeedEntryResp]
+	fetchClient    *http.Client
+	entryRespCache *lru.Cache[string, FeedEntryResp]
 
-		repo    seymour.Repository
-		tempCli client.Client
-	}
+	repo         seymour.Repository
+	tempCli      client.Client
+	hasPromptKey bool
+}
 
-	ServerConfig struct {
-		Port       int
-		CorsHeader string
-	}
-)
-
-func NewServer(config ServerConfig, repo seymour.Repository, temporalCli client.Client) *Server {
+func NewServer(port int, corsHeader string, repo seymour.Repository, temporalCli client.Client, hasPromptKey bool) *Server {
 	var (
 		r        = errRouter{Router: mux.NewRouter()}
 		cache, _ = lru.New[string, FeedEntryResp](1024)
@@ -110,12 +105,13 @@ func NewServer(config ServerConfig, repo seymour.Repository, temporalCli client.
 		entryRespCache: cache,
 		repo:           repo,
 		tempCli:        temporalCli,
+		hasPromptKey:   hasPromptKey,
 		Server: &http.Server{
-			Addr:         fmt.Sprintf(":%d", config.Port),
+			Addr:         fmt.Sprintf(":%d", port),
 			ReadTimeout:  5 * time.Second,
 			WriteTimeout: 5 * time.Second,
 			Handler: handlers.CORS(
-				handlers.AllowedOrigins([]string{config.CorsHeader}),
+				handlers.AllowedOrigins([]string{corsHeader}),
 				handlers.AllowCredentials(),
 				handlers.AllowedMethods([]string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodOptions}),
 				handlers.AllowedHeaders([]string{"content-type"}),

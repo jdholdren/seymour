@@ -30,8 +30,9 @@ type config struct {
 	Database         string `env:"DATABASE, required"`
 	TemporalHostPort string `env:"TEMPORAL_HOST_PORT, required"`
 
-	Port int    `env:"PORT, default=4444"`
-	Cors string `env:"CORS"`
+	Port         int    `env:"PORT, default=4444"`
+	Cors         string `env:"CORS"`
+	ClaudeAPIKey string `env:"CLAUDE_API_KEY"`
 }
 
 func main() {
@@ -84,12 +85,7 @@ func main() {
 	}
 
 	// Create and start the server
-	serverConfig := api.ServerConfig{
-		Port:       cfg.Port,
-		CorsHeader: cfg.Cors,
-	}
-
-	server := api.NewServer(serverConfig, repo, temporalCli)
+	server := api.NewServer(cfg.Port, cfg.Cors, repo, temporalCli, cfg.ClaudeAPIKey != "")
 
 	// Set up run group
 	var g run.Group
