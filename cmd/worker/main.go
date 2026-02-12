@@ -27,7 +27,9 @@ import (
 type config struct {
 	Database         string `env:"DATABASE, required"`
 	TemporalHostPort string `env:"TEMPORAL_HOST_PORT, required"`
-	ClaudeAPIKey     string `env:"CLAUDE_API_KEY"`
+
+	ClaudeAPIKey    string `env:"CLAUDE_API_KEY"`
+	ClaudeAPKeyFile string `env:"CLAUDE_API_KEY_FILE"`
 }
 
 func main() {
@@ -38,6 +40,15 @@ func main() {
 	var cfg config
 	if err := envconfig.Process(ctx, &cfg); err != nil {
 		log.Fatalf("error parsing config: %s", err)
+	}
+	if cfg.ClaudeAPKeyFile != "" {
+		// If the key file is specified use that to try and populate the key
+		key, err := os.ReadFile(cfg.ClaudeAPKeyFile)
+		if err != nil {
+			log.Fatalf("error loading claude api key file: %s", err)
+		}
+
+		cfg.ClaudeAPIKey = string(key)
 	}
 
 	l := slog.New(logger.NewContextHandler(slog.NewTextHandler(os.Stdout, nil)))
