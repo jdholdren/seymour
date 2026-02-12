@@ -8,7 +8,7 @@ services:
     env_file: .env
     environment:
       - DATABASE=/data/citadel/citadel.sqlite
-      - TEMPORAL_HOST_PORT=host.docker.internal:7236
+      - TEMPORAL_HOST_PORT=temporal-server:7236
     volumes:
       - ./data/citadel:/data/citadel
     depends_on:
@@ -24,7 +24,7 @@ services:
     env_file: .env
     environment:
       - DATABASE=/data/citadel/citadel.sqlite
-      - TEMPORAL_HOST_PORT=host.docker.internal:7236
+      - TEMPORAL_HOST_PORT=temporal-server:7236
       - PORT=4444
       - CORS=http://localhost:3000
     volumes:
