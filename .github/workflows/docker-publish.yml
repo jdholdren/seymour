@@ -2,8 +2,8 @@ name: Publish Docker images
 
 on:
   push:
-    tags:
-      - "[0-9]+.[0-9]+.[0-9]+"
+    # Publish semver tags as releases.
+    tags: [ 'v*.*.*' ]
 
 env:
   REGISTRY: ghcr.io
