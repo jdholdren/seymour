@@ -3,7 +3,7 @@ name: Publish Docker images
 on:
   push:
     # Publish semver tags as releases.
-    tags: [ 'v*.*.*' ]
+    tags: ["v*.*.*"]
 
 env:
   REGISTRY: ghcr.io
@@ -47,3 +47,31 @@ jobs:
           tags: |
             ${{ env.IMAGE_BASE }}-${{ matrix.name }}:${{ steps.tag.outputs.version }}
             ${{ env.IMAGE_BASE }}-${{ matrix.name }}:latest
+  build-and-push-temporal:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract tag
+        id: tag
+        run: echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./temporalite/server
+          file: ./temporalite/server/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_BASE }}-temporal:${{ steps.tag.outputs.version }}
+            ${{ env.IMAGE_BASE }}-temporal:latest
