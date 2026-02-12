@@ -2,9 +2,11 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/api/workflowservice/v1"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
@@ -15,21 +17,17 @@ import (
 // Returns an error when the namespace cannot be created or described.
 func EnsureDefaultNamespace(ctx context.Context, cli workflowservice.WorkflowServiceClient) error {
 	// First see if it exists
-	ns, err := cli.DescribeNamespace(ctx, &workflowservice.DescribeNamespaceRequest{
-		Namespace: "default",
-	})
-	if err != nil {
-		return fmt.Errorf("error describing default namespace: %s", err)
-	}
-	if ns != nil {
-		return nil
-	}
-
-	if _, err := cli.RegisterNamespace(ctx, &workflowservice.RegisterNamespaceRequest{
+	_, err := cli.RegisterNamespace(ctx, &workflowservice.RegisterNamespaceRequest{
 		Namespace:                        "default",
 		WorkflowExecutionRetentionPeriod: durationpb.New(72 * time.Hour),
-	}); err != nil {
-		return fmt.Errorf("error creating namespace: %s", err)
+	})
+	// Handle conflict
+	var allreadyErr *serviceerror.NamespaceAlreadyExists
+	if errors.As(err, &allreadyErr) {
+		err = nil
+	}
+	if err != nil {
+		return fmt.Errorf("error registering default namespace: %s", err)
 	}
 
 	return nil
