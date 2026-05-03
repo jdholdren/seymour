@@ -34,7 +34,6 @@ services:
   temporal-server:
     image: temporalio/temporal:latest
     ports:
-      - "7233:7233"
       - "8233:8233"
     volumes:
       - ./data/temporal:/home/temporal
