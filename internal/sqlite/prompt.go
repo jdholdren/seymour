@@ -33,7 +33,7 @@ func (r Repo) SetPrompt(ctx context.Context, content string) (seymour.Prompt, er
 	if err != nil {
 		return seymour.Prompt{}, fmt.Errorf("error beginning transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Deactivate all existing active prompts
 	if _, err := tx.ExecContext(ctx, `UPDATE prompts SET active = 0 WHERE active = 1;`); err != nil {

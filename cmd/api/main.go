@@ -64,7 +64,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("error opening database: %s", err)
 	}
-	defer dbx.Close()
+	defer func() { _ = dbx.Close() }()
 
 	// Run all migrations
 	if err := migrations.Run(dbx); err != nil {

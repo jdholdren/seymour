@@ -61,13 +61,15 @@ func registerEverything(ctx context.Context, w worker.Worker, a activities, cli 
 			return err
 		}
 	}
-	handle.Update(ctx, client.ScheduleUpdateOptions{
+	if err := handle.Update(ctx, client.ScheduleUpdateOptions{
 		DoUpdate: func(input client.ScheduleUpdateInput) (*client.ScheduleUpdate, error) {
 			return &client.ScheduleUpdate{
 				Schedule: &input.Description.Schedule,
 			}, nil
 		},
-	})
+	}); err != nil {
+		return err
+	}
 	// Refresh timelines
 	handle = cli.ScheduleClient().GetHandle(ctx, "refresh_timelines")
 	if _, err := handle.Describe(ctx); err != nil {
@@ -86,13 +88,15 @@ func registerEverything(ctx context.Context, w worker.Worker, a activities, cli 
 			return err
 		}
 	}
-	handle.Update(ctx, client.ScheduleUpdateOptions{
+	if err := handle.Update(ctx, client.ScheduleUpdateOptions{
 		DoUpdate: func(input client.ScheduleUpdateInput) (*client.ScheduleUpdate, error) {
 			return &client.ScheduleUpdate{
 				Schedule: &input.Description.Schedule,
 			}, nil
 		},
-	})
+	}); err != nil {
+		return err
+	}
 
 	return nil
 }

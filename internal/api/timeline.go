@@ -300,7 +300,7 @@ func (s Server) getFeedEntry(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Strip it for readability and sanitize
 	parser := readability.NewParser()
