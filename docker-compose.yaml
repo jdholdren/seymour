@@ -32,20 +32,24 @@ services:
     depends_on:
       - temporal-server
   temporal-server:
-    build:
-      context: ./temporalite/server
-      dockerfile: ./Dockerfile
+    image: temporalio/auto-setup:1.28.0
     ports:
       - "7236:7236"
       - "7233:7233"
-    # Issues with the bind overwriting particular things inside the container, need to bind specifically
-    # volumes:
-    # - ./data/temporal:/etc/temporal/
+    environment:
+      - DB=sqlite
+      - DB_FILENAME=/etc/temporal/default.db
+      - TEMPORAL_ADDRESS=0.0.0.0:7236
+      - TEMPORAL_HTTP_PORT=7233
+    volumes:
+      - ./data/temporal:/etc/temporal
     restart: unless-stopped
   temporal-ui:
-    build:
-      context: ./temporalite/ui
-      dockerfile: ./Dockerfile
+    image: temporalio/ui:2.39.0
     ports:
       - "8233:8233"
+    environment:
+      - TEMPORAL_ADDRESS=temporal-server:7236
+    depends_on:
+      - temporal-server
     restart: unless-stopped
