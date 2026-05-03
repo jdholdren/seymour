@@ -20,7 +20,6 @@ import (
 
 	"github.com/jdholdren/seymour/internal/logger"
 	seyqlite "github.com/jdholdren/seymour/internal/sqlite"
-	"github.com/jdholdren/seymour/internal/worker"
 	seyworker "github.com/jdholdren/seymour/internal/worker"
 )
 
@@ -59,7 +58,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("error opening database: %s", err)
 	}
-	defer dbx.Close()
+	defer func() { _ = dbx.Close() }()
 
 	repo := seyqlite.New(dbx)
 
@@ -81,7 +80,7 @@ func main() {
 	}
 
 	// Ensure that the default queue is there:
-	if err := worker.EnsureDefaultNamespace(ctx, temporalCli.WorkflowService()); err != nil {
+	if err := seyworker.EnsureDefaultNamespace(ctx, temporalCli.WorkflowService()); err != nil {
 		log.Fatalln("error ensuring default namespace:", err)
 	}
 

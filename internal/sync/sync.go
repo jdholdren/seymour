@@ -64,7 +64,7 @@ func Feed(ctx context.Context, feedID, feedURL string) (seymour.Feed, []seymour.
 	if err != nil {
 		return seymour.Feed{}, nil, fmt.Errorf("error getting feed url: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return seymour.Feed{}, nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)

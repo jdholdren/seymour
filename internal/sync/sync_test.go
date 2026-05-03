@@ -57,7 +57,7 @@ const testAtomFeed = `<?xml version="1.0" encoding="UTF-8"?>
 func TestFeed_RSS(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/rss+xml")
-		w.Write([]byte(testRSSFeed))
+		_, _ = w.Write([]byte(testRSSFeed))
 	}))
 	defer srv.Close()
 
@@ -84,7 +84,7 @@ func TestFeed_RSS(t *testing.T) {
 func TestFeed_Atom(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/atom+xml")
-		w.Write([]byte(testAtomFeed))
+		_, _ = w.Write([]byte(testAtomFeed))
 	}))
 	defer srv.Close()
 
